@@ -1,0 +1,23 @@
+[project]
+name = "shiritori-bingo-backend"
+version = "0.1.0"
+description = "しりとりビンゴのバックエンド"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi[standard]>=0.116.1,<1.0.0",
+    "bcrypt>=4.3.0,<5.0.0",
+    "aiosqlite>=0.21.0,<1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1,<9.0.0",
+    "ruff>=0.12.10,<1.0.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

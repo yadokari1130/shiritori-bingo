@@ -1,0 +1,584 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { useGameStore } from '../store/game'
+import { buildCardCharPool, maxCardSize } from '../utils/shiritori'
+import type { Settings } from '../types'
+import RuleSettingsForm from './RuleSettingsForm.vue'
+
+const store = useGameStore()
+
+const editingName = ref('')
+const editNameError = ref('')
+const editSettings = ref<Settings>({ ...store.draftSettings })
+const isUpdating = ref(false)
+const copied = ref(false)
+
+watch(
+  () => store.settings,
+  (s) => {
+    editSettings.value = { ...s }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => store.myPlayer,
+  (p) => {
+    if (p) editingName.value = p.name
+  },
+  { immediate: true },
+)
+
+const roomUrl = computed(() => {
+  if (!store.roomId) return ''
+  return `${window.location.origin}/game/${store.roomId}`
+})
+
+const canStart = computed(() => {
+  const state = store.gameState
+  if (!state) return false
+  if (!store.isHost) return false
+  if (state.players.length < 2) return false
+
+  const s = editSettings.value
+  const pool = buildCardCharPool(s.cardOptions)
+  const max = maxCardSize(pool)
+  if (s.cardSize < 3 || s.cardSize % 2 === 0 || s.cardSize > max) return false
+
+  if (s.endCondition === 'turns' && s.targetTurns <= 0) return false
+  if (s.endCondition === 'bingos' && (s.targetBingos < 1 || s.targetBingos > s.cardSize * 2 + 2)) return false
+
+  if (s.mode === 'team') {
+    if (s.teamCount > state.players.length) return false
+    const teamIds = new Set<string>()
+    for (const p of state.players) {
+      if (p.teamId) teamIds.add(p.teamId)
+    }
+    if (teamIds.size < s.teamCount) return false
+  }
+
+  return true
+})
+
+function copyUrl(): void {
+  if (!roomUrl.value) return
+  navigator.clipboard.writeText(roomUrl.value).then(() => {
+    copied.value = true
+    setTimeout(() => (copied.value = false), 2000)
+  })
+}
+
+const isSubmittingName = ref(false)
+const joinPassword = ref('')
+
+async function onSubmitName(): Promise<void> {
+  const name = editingName.value.trim()
+  if (!name) {
+    editNameError.value = '名前を入力してください。'
+    return
+  }
+  if (!store.roomId) return
+
+  editNameError.value = ''
+  isSubmittingName.value = true
+  try {
+    if (!store.myPlayer) {
+      await store.joinRoom(store.roomId, name, joinPassword.value || null)
+    } else {
+      await store.updateName(name)
+    }
+  } catch {
+    // エラーはストアに格納済み
+  } finally {
+    isSubmittingName.value = false
+  }
+}
+
+async function onUpdateSettings(): Promise<void> {
+  isUpdating.value = true
+  try {
+    await store.updateSettings({ ...editSettings.value })
+  } finally {
+    isUpdating.value = false
+  }
+}
+
+async function onStartGame(): Promise<void> {
+  await store.startGame()
+}
+
+async function onChangeHost(playerId: string, playerName: string): Promise<void> {
+  if (!confirm(`${playerName} さんを親（ホスト）に変更しますか？`)) {
+    return
+  }
+  await store.changeHost(playerId)
+}
+
+async function onKickPlayer(playerId: string, playerName: string): Promise<void> {
+  if (!confirm(`${playerName} さんを強制退出させますか？`)) {
+    return
+  }
+  await store.kickPlayer(playerId)
+}
+
+async function onSelectTeam(teamId: string | null): Promise<void> {
+  await store.selectTeam(teamId)
+}
+
+async function onRandomizeTeams(): Promise<void> {
+  await store.randomizeTeams()
+}
+
+function teamLabel(index: number): string {
+  return `チーム ${index + 1}`
+}
+
+function teamMemberNames(teamId: string): string {
+  if (!store.gameState) return ''
+  return store.gameState.players
+    .filter((p: { teamId: string | null; name: string }) => p.teamId === teamId)
+    .map((p: { teamId: string | null; name: string }) => p.name)
+    .join('、')
+}
+
+async function onGoToTop(): Promise<void> {
+  if (store.myPlayer) {
+    if (!confirm('ロビーから退出してトップ画面へ戻りますか？')) {
+      return
+    }
+  }
+  await store.leaveAndGoToTop()
+}
+
+async function onDissolveRoom(): Promise<void> {
+  if (!confirm('部屋を解散しますか？\n部屋は削除され、参加者全員が退出となります。')) {
+    return
+  }
+  await store.dissolveRoom()
+}
+</script>
+
+<template>
+  <div class="lobby-view">
+    <header class="screen-header">
+      <div class="header-left">
+        <h1>しりとりビンゴ ロビー</h1>
+        <p>参加者が集まるまで待機してください。親（ホスト）が設定を確認してゲームを開始します。</p>
+      </div>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="secondary-button header-btn"
+          @click="onGoToTop"
+        >
+          トップに戻る
+        </button>
+        <button
+          v-if="store.isHost"
+          type="button"
+          class="danger-button header-btn"
+          @click="onDissolveRoom"
+        >
+          部屋を解散する
+        </button>
+      </div>
+    </header>
+
+
+    <p v-if="store.errorMessage" class="notice error mb-4">
+      {{ store.errorMessage }}
+    </p>
+
+    <div>
+      <!-- 左列：ルーム情報・参加者一覧・操作 -->
+      <v-row>
+        <v-col cols="12" lg="4">
+          <div class="lobby-main-col">
+            <!-- 招待URL -->
+            <section class="panel setup-panel mb-4">
+              <div class="section-heading">
+                <h2>参加用URL</h2>
+                <p>このURLを他のプレイヤーに共有して招待します</p>
+              </div>
+              <div class="url-row">
+                <input
+                  :value="roomUrl"
+                  type="text"
+                  class="text-input"
+                  readonly
+                >
+                <button
+                  type="button"
+                  class="secondary-button"
+                  @click="copyUrl"
+                >
+                  {{ copied ? 'コピー完了！' : 'URLをコピー' }}
+                </button>
+              </div>
+            </section>
+
+            <!-- 参加者一覧 -->
+            <section class="panel setup-panel mb-4">
+              <div class="section-heading">
+                <h2>参加プレイヤー ({{ store.players.length }}人)</h2>
+                <p>2人以上で対戦を開始できます</p>
+              </div>
+
+              <ul class="players-list">
+                <li
+                  v-for="player in store.players"
+                  :key="player.id"
+                  class="player-item"
+                  :class="{ 'is-me': player.id === store.myPlayerId }"
+                >
+                  <div class="player-info">
+                    <strong>{{ player.name }}</strong>
+                    <span v-if="player.id === store.myPlayerId" class="tag-badge current-badge">あなた</span>
+                  </div>
+                  <div class="player-right">
+                    <div class="player-badges">
+                      <span v-if="player.id === store.gameState?.hostPlayerId" class="status-badge">
+                        親（ホスト）
+                      </span>
+                      <span v-if="player.connectionStatus === 'disconnected'" class="status-badge disqualified">
+                        切断中
+                      </span>
+                    </div>
+                    <div v-if="store.isHost && player.id !== store.myPlayerId" class="player-actions">
+                      <button
+                        type="button"
+                        class="secondary-button btn-xs"
+                        @click="onChangeHost(player.id, player.name)"
+                      >
+                        親にする
+                      </button>
+                      <button
+                        type="button"
+                        class="danger-button btn-xs"
+                        @click="onKickPlayer(player.id, player.name)"
+                      >
+                        退出
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+
+              <div class="name-edit-box mt-4">
+                <label for="editMyName" class="field-label">
+                  {{ store.myPlayer ? '名前を変更する' : '名前を入力して参加' }}
+                </label>
+                <div class="name-input-row">
+                  <input
+                    id="editMyName"
+                    v-model="editingName"
+                    type="text"
+                    class="text-input"
+                    :placeholder="store.myPlayer ? '新しい名前' : '名前を入力'"
+                    @keydown.enter="onSubmitName"
+                  >
+                  <button
+                    type="button"
+                    class="secondary-button"
+                    :disabled="isSubmittingName || !editingName.trim()"
+                    @click="onSubmitName"
+                  >
+                    {{ isSubmittingName ? '更新中…' : (store.myPlayer ? '名前変更' : '参加する') }}
+                  </button>
+                </div>
+                <p v-if="editNameError" class="notice error mt-2">{{ editNameError }}</p>
+              </div>
+            </section>
+
+            <!-- チーム分け（チーム戦時） -->
+            <section v-if="store.gameState?.settings.mode === 'team'" class="panel setup-panel mb-4">
+              <div class="section-heading">
+                <h2>チーム編成</h2>
+                <p>所属するチームを選択してください</p>
+              </div>
+
+              <div class="teams-grid">
+                <div
+                  v-for="team in store.teams"
+                  :key="team.id"
+                  class="team-box"
+                  :class="{ 'is-my-team': team.id === store.myPlayer?.teamId }"
+                >
+                  <div class="team-title-row">
+                    <strong>{{ teamLabel(store.teams.indexOf(team)) }}</strong>
+                    <span v-if="team.id === store.myPlayer?.teamId" class="status-badge">所属中</span>
+                  </div>
+                  <p class="team-members">
+                    {{ teamMemberNames(team.id) || '（未所属）' }}
+                  </p>
+                  <div class="team-action">
+                    <button
+                      v-if="team.id !== store.myPlayer?.teamId"
+                      type="button"
+                      class="secondary-button btn-sm"
+                      @click="onSelectTeam(team.id)"
+                    >
+                      このチームに入る
+                    </button>
+                    <button
+                      v-else
+                      type="button"
+                      class="danger-button btn-sm"
+                      @click="onSelectTeam(null)"
+                    >
+                      抜ける
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="store.isHost" class="mt-3">
+                <button
+                  type="button"
+                  class="secondary-button btn-sm"
+                  @click="onRandomizeTeams"
+                >
+                  未所属者を均等に振り分ける
+                </button>
+              </div>
+            </section>
+
+            <!-- 親の操作（開始・解散） -->
+            <section v-if="store.isHost" class="panel setup-panel mb-4 host-action-panel">
+              <div class="section-heading">
+                <h2>親の操作</h2>
+                <p>全員が揃ったらゲームを開始してください</p>
+              </div>
+
+              <div class="host-action-buttons">
+                <button
+                  type="button"
+                  class="primary-button start-game-btn"
+                  :disabled="!canStart"
+                  @click="onStartGame"
+                >
+                  ゲームを開始する
+                </button>
+                <button
+                  type="button"
+                  class="danger-button dissolve-room-btn"
+                  @click="onDissolveRoom"
+                >
+                  部屋を解散する
+                </button>
+              </div>
+              <p v-if="!canStart" class="help-note mt-2 text-danger">
+                ※2人以上の参加、正しいルール設定、チーム戦では各チームに最低1人の所属が必要です。
+              </p>
+            </section>
+
+
+            <section v-else class="panel setup-panel mb-4">
+              <p class="notice info">
+                親（ホスト）がゲームを開始するのを待機しています…
+              </p>
+            </section>
+          </div>
+        </v-col>
+
+        <!-- 右列：ルール設定プレビュー／編集（親のみ編集可能） -->
+        <v-col cols="12" lg="8">
+          <div class="lobby-side-col">
+            <section class="panel setup-panel">
+              <div class="section-heading">
+                <h2>{{ store.isHost ? 'ルール設定の変更' : 'ルール設定' }}</h2>
+                <p>{{ store.isHost ? '変更後に「設定を反映」を押してください' : '現在のゲーム設定' }}</p>
+              </div>
+
+              <RuleSettingsForm
+                v-if="store.isHost"
+                v-model="editSettings"
+                submit-button-text="設定を反映する"
+                :is-submitting="isUpdating"
+                @submit="onUpdateSettings"
+              />
+
+              <!-- 参加者視点（設定プレビューのみ） -->
+              <div v-else class="settings-preview">
+                <p><strong>モード:</strong> {{ store.settings.mode === 'team' ? `チーム戦 (${store.settings.teamCount}チーム)` : '個人戦' }}</p>
+                <p><strong>カード:</strong> {{ store.settings.cardSize }}×{{ store.settings.cardSize }} マス</p>
+                <p>
+                  <strong>終了条件:</strong>
+                  {{ store.settings.endCondition === 'turns' ? `指定ターン数 (${store.settings.targetTurns}ターン)` : `指定ビンゴ数 (${store.settings.targetBingos}本達成)` }}
+                </p>
+                <p>
+                  <strong>時間設定:</strong>
+                  制限時間 {{ store.settings.timeLimitSeconds }}秒 / 初回エクストラ {{ store.settings.extraTimeSeconds }}秒{{ store.settings.forceSkipOnTimeout ? '（時間切れで強制スキップ）' : '' }}
+                </p>
+                <p><strong>無効入力の扱い:</strong> {{ store.settings.invalidAction === 'disqualify' ? '失格' : 'ターンスキップ' }}</p>
+              </div>
+            </section>
+          </div>
+        </v-col>
+      </v-row>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.lobby-view {
+  display: grid;
+  gap: 20px;
+}
+
+.url-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.players-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.player-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fffefa;
+}
+
+.player-item.is-me {
+  border-color: var(--teal);
+  background: var(--teal-pale);
+}
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.name-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.team-box {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fffefa;
+  display: grid;
+  gap: 6px;
+}
+
+.team-box.is-my-team {
+  border: 2px solid var(--coral);
+  background: #fff5f2;
+}
+
+.team-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.team-members {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-height: 1.4em;
+}
+
+.start-game-btn {
+  width: 100%;
+  font-size: 1.1rem;
+  padding: 12px 20px;
+}
+
+.player-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.player-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-sm {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
+.btn-xs {
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  border-radius: 6px;
+}
+
+.settings-preview p {
+  margin: 8px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.95rem;
+}
+
+.text-danger {
+  color: var(--danger);
+}
+
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.mt-4 { margin-top: 16px; }
+.mb-4 { margin-bottom: 16px; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.header-btn {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.host-action-buttons {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.dissolve-room-btn {
+  padding: 12px 18px;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .host-action-buttons {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+

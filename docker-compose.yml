@@ -1,0 +1,14 @@
+services:
+  app:
+    build:
+      context: ./backend
+    environment:
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      DATABASE_PATH: ${DATABASE_PATH:-/app/data/shiritori-bingo.db}
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-}
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

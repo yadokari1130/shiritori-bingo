@@ -1,0 +1,724 @@
+from __future__ import annotations
+
+import asyncio
+import secrets
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+
+from app import broadcast, dao, db, engine, security
+from app.models import (
+    ActionRequest,
+    ChangeHostRequest,
+    ChangeTeamRequest,
+    CreateRoomRequest,
+    DisqualifyAction,
+    GameState,
+    JoinRoomRequest,
+    KickPlayerRequest,
+    NameChangeRequest,
+    Player,
+    SettingsUpdateRequest,
+    SkipAction,
+    Team,
+    UndoAction,
+    WordAction,
+)
+
+router = APIRouter()
+
+
+async def _get_conn():
+    return await db.get_db()
+
+
+async def _get_current_player_id(request: Request) -> str | None:
+    """Cookie からプレイヤーIDを特定する。"""
+    token = request.cookies.get(security.SESSION_COOKIE_NAME)
+    if not token:
+        return None
+    conn = await _get_conn()
+    session = await dao.get_session_by_token_hash(conn, security.hash_token(token))
+    if session is None:
+        return None
+    return session["player_id"]
+
+
+async def _require_player(request: Request) -> str:
+    player_id = await _get_current_player_id(request)
+    if player_id is None:
+        raise HTTPException(status_code=403, detail="操作権限がありません")
+    return player_id
+
+
+def _public_state(state: GameState) -> dict:
+    """レスポンス/SSE 用に undo 履歴を除いた公開状態を返す。"""
+    data = state.model_dump(mode="json")
+    data.pop("undoHistory", None)
+    return data
+
+
+async def _elect_new_host_if_needed(state: GameState) -> bool:
+    """ホストが不在の場合、接続中の先頭参加者をホストにする。変更があれば True。"""
+    if state.hostPlayerId is None:
+        connected = [p for p in state.players if p.connectionStatus == "connected"]
+        connected.sort(key=lambda p: p.sortOrder)
+        if connected:
+            state.hostPlayerId = connected[0].id
+            return True
+    return False
+
+
+@router.post("/api/rooms")
+async def create_room(request: Request, body: CreateRoomRequest):
+    conn = await _get_conn()
+    room_id = secrets.token_urlsafe(12)
+    password_hash = (
+        security.hash_password(body.password) if body.password else None
+    )
+    state = await dao.create_room(conn, room_id, password_hash, body.settings)
+    url = f"{request.url.scheme}://{request.url.netloc}/game/{room_id}"
+    return JSONResponse(
+        status_code=200,
+        content={"roomId": room_id, "url": url, "gameState": _public_state(state)},
+    )
+
+
+@router.get("/api/rooms/{room_id}")
+async def get_room_info(room_id: str):
+    conn = await _get_conn()
+    row = await dao.get_room(conn, room_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="ルームが存在しません")
+    return {
+        "roomId": room_id,
+        "phase": row["phase"],
+        "hasPassword": bool(row["password_hash"]),
+    }
+
+
+@router.post("/api/rooms/{room_id}/join")
+async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
+    conn = await _get_conn()
+    row = await dao.get_room(conn, room_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="ルームが存在しません")
+
+    state = await dao.load_room_state(conn, room_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="ルームが存在しません")
+
+    token = request.cookies.get(security.SESSION_COOKIE_NAME)
+    session = None
+    if token:
+        session = await dao.get_session_by_token_hash(
+            conn, security.hash_token(token)
+        )
+        if session and session["room_id"] != room_id:
+            session = None
+
+    # 有効な再接続Cookieがあれば、名前やパスワードの再入力なしで復帰する。
+    if session is None:
+        password_hash = row["password_hash"]
+        if password_hash and not security.verify_password(body.password or "", password_hash):
+            raise HTTPException(status_code=403, detail="パスワードが違います")
+        if not body.name:
+            raise HTTPException(status_code=400, detail="名前を入力してください")
+
+    is_host = False
+
+    if session is not None:
+        # 再接続
+        player_id = session["player_id"]
+        player = next((p for p in state.players if p.id == player_id), None)
+        if player is None:
+            raise HTTPException(status_code=403, detail="参加者が見つかりません")
+        if state.phase == "result" and player_id not in {p.id for p in state.players}:
+            raise HTTPException(status_code=403, detail="参加資格がありません")
+        player.connectionStatus = "connected"
+        player.disconnectedAt = None
+        await dao.set_player_connection_status(conn, player_id, True)
+        is_host = state.hostPlayerId == player_id
+        await dao.save_room_state(conn, room_id, state)
+        await broadcast.broadcast(room_id, state)
+        response = JSONResponse(
+            status_code=200,
+            content={
+                "gameState": _public_state(state),
+                "playerId": player_id,
+                "isHost": is_host,
+            },
+        )
+        security.set_session_cookie(response, token)
+        return response
+
+    if state.phase in ("playing", "result"):
+        raise HTTPException(status_code=403, detail="参加資格がありません")
+
+    # 新規参加
+    player_id = dao.generate_uuid()
+    sort_order = await dao.get_next_player_sort_order(conn, room_id)
+    status = "active" if state.settings.mode == "individual" else None
+    player = Player(
+        id=player_id,
+        name=body.name,
+        status=status,  # type: ignore[arg-type]
+        connectionStatus="connected",
+        sortOrder=sort_order,
+    )
+    state.players.append(player)
+    if state.hostPlayerId is None:
+        state.hostPlayerId = player_id
+        is_host = True
+
+    await dao.save_room_state(conn, room_id, state)
+    session_id = dao.generate_uuid()
+    new_token = security.generate_session_token()
+    await dao.create_session(
+        conn, session_id, room_id, player_id, security.hash_token(new_token)
+    )
+    await broadcast.broadcast(room_id, state)
+    response = JSONResponse(
+        status_code=200,
+        content={
+            "gameState": _public_state(state),
+            "playerId": player_id,
+            "isHost": is_host,
+        },
+    )
+    security.set_session_cookie(response, new_token)
+    return response
+
+
+@router.put("/api/rooms/{room_id}/name")
+async def change_name(room_id: str, request: Request, body: NameChangeRequest):
+    if not body.name:
+        raise HTTPException(status_code=400, detail="名前を入力してください")
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.phase != "setup":
+            raise HTTPException(status_code=403, detail="名前はロビー中のみ変更できます")
+        player = next((p for p in state.players if p.id == player_id), None)
+        if player is None:
+            raise HTTPException(status_code=403, detail="参加者が見つかりません")
+        player.name = body.name
+        await dao.save_room_state(conn, room_id, state)
+        await broadcast.broadcast(room_id, state)
+    return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+
+
+@router.post("/api/rooms/{room_id}/leave")
+async def leave_room(room_id: str, request: Request):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.phase not in ("setup", "result"):
+            raise HTTPException(
+                status_code=403, detail="このフェーズでは退出できません"
+            )
+        if player_id not in {p.id for p in state.players}:
+            raise HTTPException(status_code=403, detail="参加者が見つかりません")
+
+        host_changed = await cleanup_remove_player(conn, room_id, state, player_id)
+        response = JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+        security.clear_session_cookie(response)
+        await broadcast.broadcast(
+            room_id,
+            state,
+            notice="親が変更されました。" if host_changed else None,
+        )
+        return response
+
+
+@router.delete("/api/rooms/{room_id}")
+async def delete_room(room_id: str, request: Request):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.hostPlayerId != player_id:
+            raise HTTPException(status_code=403, detail="親だけが部屋を解散できます")
+        if state.phase != "setup":
+            raise HTTPException(status_code=403, detail="ロビー中のみ解散できます")
+
+        # SSEで参加者全員に解散を通知
+        await broadcast.broadcast_event(
+            room_id,
+            event="dissolved",
+            payload={"message": "部屋が解散されました。"},
+        )
+        await dao.delete_room(conn, room_id)
+        broadcast._rooms.pop(room_id, None)
+
+        response = JSONResponse(status_code=200, content={"success": True})
+        security.clear_session_cookie(response)
+        return response
+
+
+
+async def cleanup_remove_player(
+    conn, room_id: str, state: GameState, player_id: str
+) -> bool:
+    """プレイヤー削除と空ルーム処理を行う。ホスト変更があれば True。"""
+    before_host = state.hostPlayerId
+    state.players = [p for p in state.players if p.id != player_id]
+    if state.hostPlayerId == player_id:
+        connected = [p for p in state.players if p.connectionStatus == "connected"]
+        connected.sort(key=lambda p: p.sortOrder)
+        state.hostPlayerId = connected[0].id if connected else None
+    for team in state.teams:
+        team.memberPlayerIds = [
+            p.id for p in state.players if p.teamId == team.id
+        ]
+    if not state.players:
+        await dao.delete_room(conn, room_id)
+        broadcast._rooms.pop(room_id, None)
+        return before_host != state.hostPlayerId
+    await dao.delete_player(conn, player_id)
+    await dao.save_room_state(conn, room_id, state)
+    return before_host != state.hostPlayerId
+
+
+@router.put("/api/rooms/{room_id}/settings")
+async def update_settings(room_id: str, request: Request, body: SettingsUpdateRequest):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.hostPlayerId != player_id:
+            raise HTTPException(status_code=403, detail="親だけが設定を変更できます")
+        if state.phase != "setup":
+            raise HTTPException(status_code=403, detail="設定はロビー中のみ変更できます")
+
+        # 設定値の検証
+        try:
+            candidates = engine.get_candidate_chars(body.settings)
+            max_size = engine.max_card_size(candidates)
+            if body.settings.cardSize > max_size:
+                raise ValueError("カードサイズが文字候補数の上限を超えています")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        old_mode = state.settings.mode
+        old_team_count = state.settings.teamCount
+        state.settings = body.settings
+
+        # モードやチーム数が変わった場合はチームを再作成
+        if (
+            state.settings.mode == "team"
+            and (old_mode != "team" or old_team_count != state.settings.teamCount)
+        ):
+            db_team_ids = {t["id"] for t in await dao.list_teams(conn, room_id)}
+            for tid in db_team_ids:
+                await conn.execute("DELETE FROM teams WHERE id = ?", (tid,))
+            state.teams = []
+            for i in range(state.settings.teamCount):
+                team_id = dao.generate_uuid()
+                await conn.execute(
+                    "INSERT INTO teams (id, room_id, sort_order) VALUES (?, ?, ?)",
+                    (team_id, room_id, i),
+                )
+                state.teams.append(Team(id=team_id, sortOrder=i))
+            for player in state.players:
+                player.teamId = None
+        elif state.settings.mode == "individual" and old_mode != "individual":
+            db_team_ids = {t["id"] for t in await dao.list_teams(conn, room_id)}
+            for tid in db_team_ids:
+                await conn.execute("DELETE FROM teams WHERE id = ?", (tid,))
+            state.teams = []
+            for player in state.players:
+                player.teamId = None
+                player.status = "active"
+
+        await dao.save_room_state(conn, room_id, state)
+        await broadcast.broadcast(room_id, state)
+    return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+
+
+@router.post("/api/rooms/{room_id}/start")
+async def start_game(room_id: str, request: Request):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.hostPlayerId != player_id:
+            raise HTTPException(status_code=403, detail="親だけが開始できます")
+        if state.phase != "setup":
+            raise HTTPException(status_code=403, detail="ロビー中のみ開始できます")
+        if len(state.players) < 2:
+            raise HTTPException(
+                status_code=400, detail="参加者が2人以上必要です"
+            )
+        if state.settings.mode == "team":
+            for team in state.teams:
+                team.memberPlayerIds = [
+                    p.id for p in state.players if p.teamId == team.id
+                ]
+                if not team.memberPlayerIds:
+                    raise HTTPException(
+                        status_code=400, detail="所属者がいないチームがあります"
+                    )
+
+        try:
+            engine.start_game(state, dao.now_ms())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        await dao.delete_undo_snapshots_for_room(conn, room_id)
+        await dao.delete_word_history_for_room(conn, room_id)
+        await dao.save_room_state(conn, room_id, state)
+        await broadcast.broadcast(room_id, state)
+    return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+
+
+@router.post("/api/rooms/{room_id}/lobby")
+async def return_to_lobby(room_id: str, request: Request):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.hostPlayerId != player_id:
+            raise HTTPException(status_code=403, detail="親だけがロビーに戻せます")
+        if state.phase != "result":
+            raise HTTPException(status_code=403, detail="結果画面からのみ戻れます")
+
+        state.phase = "setup"
+        state.freeChar = ""
+        state.playOrder = []
+        state.roundRoster = []
+        state.round = 0
+        state.orderIndex = 0
+        state.currentPlayerId = None
+        state.currentTeamId = None
+        state.requiredStartChar = ""
+        state.usedWords = []
+        state.wordHistory = []
+        state.remainingTimeMs = 0
+        state.currentTurnTimeLimitMs = 0
+        state.currentTurnInputPlayerId = None
+        state.turnStartedAt = None
+        state.result = None
+        state.undoHistory = []
+
+        for player in state.players:
+            player.card = None
+            player.bingoLineIds = [] if state.settings.mode == "individual" else None
+            player.openedCellCount = None
+            player.status = "active" if state.settings.mode == "individual" else None
+        for team in state.teams:
+            team.status = "active"
+            team.card = None
+            team.bingoLineIds = []
+            team.openedCellCount = 0
+            team.memberPlayerIds = [
+                p.id for p in state.players if p.teamId == team.id
+            ]
+
+        await dao.delete_undo_snapshots_for_room(conn, room_id)
+        await dao.delete_word_history_for_room(conn, room_id)
+        await dao.save_room_state(conn, room_id, state)
+        await broadcast.broadcast(room_id, state)
+    return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+
+
+@router.post("/api/rooms/{room_id}/host")
+async def change_host(room_id: str, request: Request, body: ChangeHostRequest):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.hostPlayerId != player_id:
+            raise HTTPException(status_code=403, detail="親だけが変更できます")
+        if state.phase != "setup":
+            raise HTTPException(status_code=403, detail="ロビー中のみ変更できます")
+        if body.playerId not in {p.id for p in state.players}:
+            raise HTTPException(status_code=400, detail="対象の参加者が存在しません")
+        state.hostPlayerId = body.playerId
+        await dao.save_room_state(conn, room_id, state)
+        await broadcast.broadcast(
+            room_id, state, notice="親が変更されました。"
+        )
+    return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+
+
+@router.post("/api/rooms/{room_id}/kick")
+async def kick_player(room_id: str, request: Request, body: KickPlayerRequest):
+    operator_player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.hostPlayerId != operator_player_id:
+            raise HTTPException(status_code=403, detail="親だけが退出させることができます")
+        if state.phase != "setup":
+            raise HTTPException(
+                status_code=403, detail="ロビー中のみ退出させることができます"
+            )
+        if body.playerId not in {p.id for p in state.players}:
+            raise HTTPException(status_code=400, detail="対象の参加者が存在しません")
+        if body.playerId == operator_player_id:
+            raise HTTPException(
+                status_code=400, detail="自分自身を強制退出させることはできません"
+            )
+
+        target_player = next((p for p in state.players if p.id == body.playerId), None)
+        target_name = target_player.name if target_player else "参加者"
+
+        await cleanup_remove_player(conn, room_id, state, body.playerId)
+        await broadcast.broadcast(
+            room_id,
+            state,
+            notice=f"{target_name} さんが退出させられました。",
+        )
+    return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+
+
+@router.put("/api/rooms/{room_id}/team")
+async def change_team(room_id: str, request: Request, body: ChangeTeamRequest):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.phase != "setup":
+            raise HTTPException(status_code=403, detail="ロビー中のみ変更できます")
+        if state.settings.mode != "team":
+            raise HTTPException(status_code=400, detail="チーム戦ではありません")
+        if body.teamId is not None and body.teamId not in {t.id for t in state.teams}:
+            raise HTTPException(status_code=400, detail="チームが存在しません")
+        player = next((p for p in state.players if p.id == player_id), None)
+        if player is None:
+            raise HTTPException(status_code=403, detail="参加者が見つかりません")
+        player.teamId = body.teamId
+        for team in state.teams:
+            team.memberPlayerIds = [
+                p.id for p in state.players if p.teamId == team.id
+            ]
+        await dao.save_room_state(conn, room_id, state)
+        await broadcast.broadcast(room_id, state)
+    return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+
+
+@router.post("/api/rooms/{room_id}/teams/randomize")
+async def randomize_teams(room_id: str, request: Request):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.hostPlayerId != player_id:
+            raise HTTPException(status_code=403, detail="親だけが実行できます")
+        if state.phase != "setup":
+            raise HTTPException(status_code=403, detail="ロビー中のみ実行できます")
+        if state.settings.mode != "team":
+            raise HTTPException(status_code=400, detail="チーム戦ではありません")
+        engine.randomize_teams(state.players, state.teams)
+        for team in state.teams:
+            team.memberPlayerIds = [
+                p.id for p in state.players if p.teamId == team.id
+            ]
+        await dao.save_room_state(conn, room_id, state)
+        await broadcast.broadcast(room_id, state)
+    return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+
+
+@router.post("/api/rooms/{room_id}/action")
+async def action(room_id: str, request: Request, body: ActionRequest):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        conn = await _get_conn()
+        state = await dao.load_room_state(conn, room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.phase != "playing":
+            raise HTTPException(status_code=409, detail="対戦中ではありません")
+
+        now = dao.now_ms()
+
+        if isinstance(body, WordAction):
+            if not engine.is_valid_word_input(body.word):
+                raise HTTPException(
+                    status_code=400, detail="ひらがなと伸ばし棒で入力してください"
+                )
+            try:
+                old_history_len = len(state.wordHistory)
+                engine.process_word(state, player_id, body.word, now)
+                if len(state.wordHistory) > old_history_len:
+                    await dao.add_word_history(conn, room_id, state.wordHistory[-1])
+                if state.undoHistory:
+                    await dao.add_undo_snapshot(
+                        conn, room_id, state.undoHistory[-1]
+                    )
+            except ValueError as exc:
+                raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+        elif isinstance(body, (SkipAction, DisqualifyAction)):
+            if state.hostPlayerId != player_id:
+                raise HTTPException(
+                    status_code=403, detail="親だけが実行できます"
+                )
+            current_id = (
+                state.currentPlayerId
+                if state.settings.mode == "individual"
+                else state.currentTeamId
+            )
+            subject_id = body.subjectId
+            if subject_id != current_id:
+                raise HTTPException(
+                    status_code=400, detail="現在手番の対象ではありません"
+                )
+            try:
+                if isinstance(body, SkipAction):
+                    engine.process_skip(state, now)
+                else:
+                    engine.process_disqualify(state, now)
+                if state.undoHistory:
+                    await dao.add_undo_snapshot(
+                        conn, room_id, state.undoHistory[-1]
+                    )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        elif isinstance(body, UndoAction):
+            if state.hostPlayerId != player_id:
+                raise HTTPException(
+                    status_code=403, detail="親だけが実行できます"
+                )
+            try:
+                state = engine.undo(state, now)
+                await dao.pop_undo_snapshot(conn, room_id)
+                await dao.sync_word_history(conn, room_id, state.wordHistory)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        await dao.save_room_state(conn, room_id, state)
+        await broadcast.broadcast(room_id, state)
+    return JSONResponse(
+        status_code=200, content={"success": True, "gameState": _public_state(state)}
+    )
+
+
+@router.get("/api/rooms/{room_id}/events")
+async def events(room_id: str, request: Request):
+    token = request.cookies.get(security.SESSION_COOKIE_NAME)
+    if not token:
+        raise HTTPException(status_code=403, detail="セッションがありません")
+    conn = await _get_conn()
+    session = await dao.get_session_by_token_hash(conn, security.hash_token(token))
+    if session is None or session["room_id"] != room_id:
+        raise HTTPException(status_code=403, detail="セッションが無効です")
+
+    player_id = session["player_id"]
+
+    async def event_generator():
+        queue = broadcast.subscribe(room_id)
+        try:
+            async with db._write_lock:
+                state = await dao.load_room_state(conn, room_id)
+                if state is None:
+                    yield broadcast.format_sse(
+                        {
+                            "event": "error",
+                            "timestamp": dao.now_ms(),
+                            "message": "ルームが存在しません",
+                        }
+                    )
+                    return
+                player = next(
+                    (p for p in state.players if p.id == player_id), None
+                )
+                if player is not None:
+                    player.connectionStatus = "connected"
+                    player.disconnectedAt = None
+                    await dao.set_player_connection_status(conn, player_id, True)
+                await dao.update_session_connections(conn, session["id"], 1)
+                state.remainingTimeMs = engine.get_remaining_time_ms(
+                    state, dao.now_ms()
+                )
+                await dao.save_room_state(conn, room_id, state)
+                host_changed = await _elect_new_host_if_needed(state)
+                await dao.save_room_state(conn, room_id, state)
+                await broadcast.broadcast(
+                    room_id,
+                    state,
+                    event="initial",
+                    notice="親が変更されました。" if host_changed else None,
+                )
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    yield broadcast.format_sse(payload)
+                except TimeoutError:
+                    yield broadcast.format_sse(
+                        {
+                            "event": "ping",
+                            "timestamp": dao.now_ms(),
+                        }
+                    )
+        finally:
+            broadcast.unsubscribe(room_id, queue)
+            async with db._write_lock:
+                new_count = await dao.update_session_connections(
+                    conn, session["id"], -1
+                )
+                if new_count == 0:
+                    await dao.set_player_connection_status(conn, player_id, False)
+                    state = await dao.load_room_state(conn, room_id)
+                    if state is not None:
+                        player = next(
+                            (p for p in state.players if p.id == player_id), None
+                        )
+                        if player is not None:
+                            player.connectionStatus = "disconnected"
+                            player.disconnectedAt = dao.now_ms()
+                        host_changed = False
+                        if state.hostPlayerId == player_id:
+                            connected = [
+                                p
+                                for p in state.players
+                                if p.connectionStatus == "connected"
+                            ]
+                            connected.sort(key=lambda p: p.sortOrder)
+                            state.hostPlayerId = (
+                                connected[0].id if connected else None
+                            )
+                            host_changed = True
+                        await dao.save_room_state(conn, room_id, state)
+                        await broadcast.broadcast(
+                            room_id,
+                            state,
+                            notice="親が変更されました。" if host_changed else None,
+                        )
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
