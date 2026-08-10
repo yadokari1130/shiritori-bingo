@@ -116,6 +116,30 @@ def test_process_word_valid_and_advance():
     assert state.currentPlayerId != first
 
 
+def test_next_round_preserves_play_order():
+    settings = Settings(cardSize=3)
+    state = GameState(phase="setup", settings=settings)
+    state.players = [
+        Player(id="p1", name="p1", status="active"),
+        Player(id="p2", name="p2", status="active"),
+        Player(id="p3", name="p3", status="active"),
+    ]
+
+    engine.start_game(state, now_ms())
+    play_order = state.playOrder.copy()
+
+    for start_char, next_char in zip(
+        [state.freeChar, "い", "う"], ["い", "う", "え"]
+    ):
+        assert state.currentPlayerId == play_order[state.orderIndex]
+        engine.process_word(state, state.currentPlayerId, start_char + next_char, now_ms())
+
+    assert state.round == 2
+    assert state.roundRoster == play_order
+    assert state.orderIndex == 0
+    assert state.currentPlayerId == play_order[0]
+
+
 def test_process_word_invalid_skip():
     settings = Settings(cardSize=3, invalidAction="skip")
     state = GameState(phase="setup", settings=settings)

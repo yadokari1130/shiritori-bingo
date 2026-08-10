@@ -327,9 +327,13 @@ def _set_subject_status(state: GameState, subject_id: str, status: str) -> None:
 
 
 def _active_subject_ids(state: GameState) -> list[str]:
+    active_ids: set[str]
     if state.settings.mode == "individual":
-        return [p.id for p in state.players if p.status == "active"]
-    return [t.id for t in state.teams if t.status == "active"]
+        active_ids = {p.id for p in state.players if p.status == "active"}
+    else:
+        active_ids = {t.id for t in state.teams if t.status == "active"}
+    # ゲーム開始時に決めた固定順を維持し、失格した対象だけを除外する。
+    return [subject_id for subject_id in state.playOrder if subject_id in active_ids]
 
 
 def _subject_bingo_count(state: GameState, subject_id: str) -> int:
