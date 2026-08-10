@@ -123,6 +123,33 @@ describe('game ストア', () => {
     expect(store.errorMessage).toBeNull()
   })
 
+  it('joinRoom: ゲーム中の403エラー時はサーバーメッセージ「ゲーム中のため参加できません」をerrorMessageに設定する', async () => {
+    const store = useGameStore()
+    const vi_api = await import('../api')
+    vi.spyOn(vi_api, 'joinRoom').mockRejectedValue(new vi_api.ApiError('ゲーム中のため参加できません', 403))
+
+    await expect(store.joinRoom('room123', 'プレイヤー名')).rejects.toThrow()
+    expect(store.errorMessage).toBe('ゲーム中のため参加できません')
+  })
+
+  it('joinRoom: パスワード不一致の403エラー時は「パスワードが違います」をerrorMessageに設定する', async () => {
+    const store = useGameStore()
+    const vi_api = await import('../api')
+    vi.spyOn(vi_api, 'joinRoom').mockRejectedValue(new vi_api.ApiError('パスワードが違います', 403))
+
+    await expect(store.joinRoom('room123', 'プレイヤー名', 'wrong')).rejects.toThrow()
+    expect(store.errorMessage).toBe('パスワードが違います')
+  })
+
+  it('joinRoom: 404エラー時は「ルームが見つかりません。」をerrorMessageに設定する', async () => {
+    const store = useGameStore()
+    const vi_api = await import('../api')
+    vi.spyOn(vi_api, 'joinRoom').mockRejectedValue(new vi_api.ApiError('Not Found', 404))
+
+    await expect(store.joinRoom('invalid_room', 'プレイヤー名')).rejects.toThrow()
+    expect(store.errorMessage).toBe('ルームが見つかりません。')
+  })
+
   it('changeHost: api.changeHost を呼び出して状態を更新する', async () => {
     const store = useGameStore()
     store.roomId = 'room123'

@@ -134,7 +134,7 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
         if player is None:
             raise HTTPException(status_code=403, detail="参加者が見つかりません")
         if state.phase == "result" and player_id not in {p.id for p in state.players}:
-            raise HTTPException(status_code=403, detail="参加資格がありません")
+            raise HTTPException(status_code=403, detail="参加できませんでした。ゲーム開始前のみ参加できます")
         player.connectionStatus = "connected"
         player.disconnectedAt = None
         await dao.set_player_connection_status(conn, player_id, True)
@@ -152,8 +152,10 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
         security.set_session_cookie(response, token)
         return response
 
-    if state.phase in ("playing", "result"):
-        raise HTTPException(status_code=403, detail="参加資格がありません")
+    if state.phase == "playing":
+        raise HTTPException(status_code=403, detail="ゲーム中のため参加できません")
+    if state.phase == "result":
+        raise HTTPException(status_code=403, detail="ゲームが終了しているため参加できません")
 
     # 新規参加
     player_id = dao.generate_uuid()

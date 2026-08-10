@@ -413,3 +413,20 @@ def test_cookie_secure_and_samesite_attributes(monkeypatch):
         assert "HttpOnly" in cookie_header or "httponly" in cookie_header.lower()
         assert "Secure" in cookie_header or "secure" in cookie_header.lower()
         assert "samesite=lax" in cookie_header.lower()
+
+
+def test_join_during_playing_or_result():
+    settings = Settings(cardSize=3)
+    with TestClient(app) as creator, TestClient(app) as joiner, TestClient(app) as late_comer:
+        res = creator.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+        creator.post(f"/api/rooms/{room_id}/join", json={"name": "A"})
+        joiner.post(f"/api/rooms/{room_id}/join", json={"name": "B"})
+        start = creator.post(f"/api/rooms/{room_id}/start")
+        assert start.status_code == 200
+
+        # ゲーム中に新規プレイヤーが参加しようとすると「ゲーム中のため参加できません」
+        late_join = late_comer.post(f"/api/rooms/{room_id}/join", json={"name": "C"})
+        assert late_join.status_code == 403
+        assert late_join.json()["detail"] == "ゲーム中のため参加できません"
+

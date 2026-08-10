@@ -220,10 +220,12 @@ export const useGameStore = defineStore('game', () => {
       applyGameState(res.gameState)
       connectSse(targetRoomId)
     } catch (err) {
-      if (err instanceof api.ApiError && err.status === 404) {
-        errorMessage.value = 'ルームが見つかりません。'
-      } else if (err instanceof api.ApiError && err.status === 403) {
-        errorMessage.value = 'パスワードが違います。'
+      if (err instanceof api.ApiError) {
+        if (err.status === 404) {
+          errorMessage.value = 'ルームが見つかりません。'
+        } else {
+          errorMessage.value = err.message || 'ルームに参加できませんでした。'
+        }
       } else {
         errorMessage.value = 'ルームに参加できませんでした。'
       }
