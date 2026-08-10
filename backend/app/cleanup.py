@@ -9,7 +9,7 @@ from app.models import GameState
 logger = logging.getLogger(__name__)
 
 
-async def remove_player_from_state(state: GameState, player_id: str) -> bool:
+def remove_player_from_state(state: GameState, player_id: str) -> bool:
     """プレイヤーを状態から削除し、ホストが変わったかを返す。"""
     before_host = state.hostPlayerId
     state.players = [p for p in state.players if p.id != player_id]
@@ -36,47 +36,46 @@ async def run_cleanup_loop() -> None:
 
 
 async def _cleanup_once() -> None:
-    conn = await db.get_db()
     now = dao.now_ms()
 
     # 24時間経過したルームを削除
     cutoff_room = now - 24 * 60 * 60 * 1000
-    old_rooms = await dao.list_rooms_updated_before(conn, cutoff_room)
+    old_rooms = await dao.list_rooms_updated_before(cutoff_room)
     for room_id in old_rooms:
-        await dao.delete_room(conn, room_id)
+        await dao.delete_room(room_id)
         broadcast._rooms.pop(room_id, None)
 
     # setup/result 状態で30分以上切断されているプレイヤーを削除
     cutoff_player = now - 30 * 60 * 1000
     for phase in ("setup", "result"):
         targets = await dao.list_disconnected_players_to_remove(
-            conn, phase, cutoff_player
+            phase, cutoff_player
         )
         for room_id, player_id in targets:
             async with db._write_lock:
-                state = await dao.load_room_state(conn, room_id)
+                state = await dao.load_room_state(room_id)
                 if state is None:
                     continue
                 if state.phase != phase:
                     continue
-                host_changed = await remove_player_from_state(state, player_id)
-                await dao.delete_player(conn, player_id)
+                host_changed = remove_player_from_state(state, player_id)
+                await dao.delete_player(player_id)
                 if state.players:
-                    await dao.save_room_state(conn, room_id, state)
+                    await dao.save_room_state(room_id, state)
                     await broadcast.broadcast(
                         room_id,
                         state,
                         notice="親が変更されました。" if host_changed else None,
                     )
                 else:
-                    await dao.delete_room(conn, room_id)
+                    await dao.delete_room(room_id)
                     broadcast._rooms.pop(room_id, None)
 
     # 30分以上プレイヤーが0人のルームを削除
     cutoff_empty_room = now - 30 * 60 * 1000
-    empty_rooms = await dao.list_empty_rooms(conn, cutoff_empty_room)
+    empty_rooms = await dao.list_empty_rooms(cutoff_empty_room)
     for room_id in empty_rooms:
-        await dao.delete_room(conn, room_id)
+        await dao.delete_room(room_id)
         broadcast._rooms.pop(room_id, None)
 
 
@@ -91,16 +90,10 @@ async def run_forced_skip_loop() -> None:
 
 
 async def _forced_skip_once() -> None:
-    conn = await db.get_db()
     now = dao.now_ms()
-    async with conn.execute(
-        "SELECT id FROM rooms WHERE phase = 'playing'"
-    ) as cursor:
-        rows = await cursor.fetchall()
-    for row in rows:
-        room_id = row["id"]
+    for room_id in await dao.list_playing_rooms():
         async with db._write_lock:
-            state = await dao.load_room_state(conn, room_id)
+            state = await dao.load_room_state(room_id)
             if state is None or state.phase != "playing":
                 continue
             if not state.settings.forceSkipOnTimeout:
@@ -112,7 +105,7 @@ async def _forced_skip_once() -> None:
                 continue
             try:
                 engine.process_skip(state, now)
-                await dao.save_room_state(conn, room_id, state)
+                await dao.save_room_state(room_id, state)
                 await broadcast.broadcast(
                     room_id,
                     state,

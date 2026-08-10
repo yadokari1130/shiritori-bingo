@@ -1,6 +1,6 @@
 # しりとりビンゴ
 
-Vue 3 + Vuetify のフロントエンドと、Python 3.14 + FastAPI + SQLite のバックエンドで構成した、複数端末対応のしりとりビンゴです。
+Vue 3 + Vuetify のフロントエンドと、Python 3.14 + FastAPI + Tortoise ORM + SQLite のバックエンドで構成した、複数端末対応のしりとりビンゴです。
 
 ルームのゲーム状態、カード、単語履歴、undo履歴はバックエンドのSQLiteへ保存し、参加者の再接続はHttpOnly CookieとSSEで行います。ブラウザの`localStorage`には、利用者が明示的に保存したゲームルールの名前付きプリセットだけを保存します。
 
@@ -26,6 +26,7 @@ uv sync --directory backend
 バックエンドを起動します。
 
 ```sh
+uv run --directory backend aerich upgrade
 uv run --directory backend fastapi dev
 ```
 
@@ -55,7 +56,15 @@ docker compose build app
 docker compose up -d app
 ```
 
-SQLite の永続化先はプロジェクト直下の `data/` です。Docker Compose ではコンテナをホストユーザー（UID 1000）で実行するため、`data/` ディレクトリが同じユーザーで書き込み可能であることを確認してください。nginx の設定は `nginx/shiritori-bingo.conf` を VPS の `sites-available` 配下へ配置し、ドメインと証明書のパスを環境に合わせて変更します。
+Dockerイメージのビルド時に`aerich upgrade`を実行します。起動時にも同じマイグレーションを実行するため、ホストからマウントした既存のSQLiteにも適用されます。
+
+SQLite の永続化先は、ローカル直接起動とDocker Composeのどちらでも `backend/data/shiritori-bingo.db` に統一しています。Docker Composeではホストの `backend/data/` をコンテナの `/app/data/` にマウントするため、`backend/data/` がコンテナから書き込み可能であることを確認してください。Composeの環境変数 `DATABASE_PATH` はコンテナ内のパスなので、設定する場合も `/app/data/shiritori-bingo.db` を指定してください。既存の `data/` にあるDBは自動で移動・削除されません。必要なデータがある場合は、停止後にバックアップしてから `backend/data/` へ移行してください。nginx の設定は `nginx/shiritori-bingo.conf` を VPS の `sites-available` 配下へ配置し、ドメインと証明書のパスを環境に合わせて変更します。
+
+Docker Compose用の`.env`はプロジェクトルートに作成します。通常は`DATABASE_PATH`を設定する必要はなく、設定する場合は次のようにコンテナ内のパスを指定します。
+
+```text
+DATABASE_PATH=/app/data/shiritori-bingo.db
+```
 
 ## CORS設定
 

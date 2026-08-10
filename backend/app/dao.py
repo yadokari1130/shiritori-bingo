@@ -4,13 +4,18 @@ import json
 import time
 import uuid
 
-import aiosqlite
-
-from app.models import GameState, UndoSnapshot, WordEntry
+from app.models import GameState, UndoSnapshot
+from app.orm_models import (
+    Player,
+    PlayerSession,
+    Room,
+    Team,
+    WordHistory,
+)
+from app.orm_models import UndoSnapshot as UndoSnapshotRow
 
 
 def now_ms() -> int:
-    """現在時刻をミリ秒で返す。"""
     return time.time_ns() // 1_000_000
 
 
@@ -23,557 +28,236 @@ def _load(text: str):
 
 
 def generate_uuid() -> str:
-    """UUIDを返す。"""
     return uuid.uuid4().hex
 
 
-async def create_room(
-    conn: aiosqlite.Connection,
-    room_id: str,
-    password_hash: str | None,
-    settings,
-    creator_token_hash: str | None = None,
-) -> GameState:
-    """ルームと初期ゲーム状態を作成する。"""
-    from app.models import GameState, Team
+def _room_row(room: Room) -> dict:
+    return {field: getattr(room, field) for field in (
+        "id", "password_hash", "creator_token_hash", "settings_json", "phase",
+        "free_char", "current_player_id", "current_team_id", "required_start_char",
+        "round", "order_index", "remaining_time_ms", "current_turn_time_limit_ms",
+        "turn_started_at", "result_json", "state_json", "created_at", "updated_at",
+        "host_player_id", "round_roster_json",
+    )}
 
-    state = GameState(
-        phase="setup", settings=settings, hasPassword=bool(password_hash)
-    )
+
+def _player_row(player: Player) -> dict:
+    return {field: getattr(player, field) for field in (
+        "id", "room_id", "name", "status", "card_json", "bingo_line_ids_json",
+        "opened_cell_count", "sort_order", "team_id", "connection_status",
+        "disconnected_at",
+    )}
+
+
+async def create_room(room_id, password_hash, settings, creator_token_hash=None):
+    from app.models import Team as TeamState
+
+    state = GameState(phase="setup", settings=settings, hasPassword=bool(password_hash))
     now = now_ms()
-    await conn.execute(
-        """
-        INSERT INTO rooms (
-            id, password_hash, creator_token_hash, settings_json, phase, free_char,
-            current_player_id, current_team_id, required_start_char,
-            round, order_index, remaining_time_ms, current_turn_time_limit_ms,
-            turn_started_at, result_json, state_json, created_at, updated_at,
-            host_player_id, round_roster_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            room_id,
-            password_hash,
-            creator_token_hash,
-            settings.model_dump_json(),
-            state.phase,
-            state.freeChar,
-            None,
-            None,
-            state.requiredStartChar,
-            state.round,
-            state.orderIndex,
-            state.remainingTimeMs,
-            state.currentTurnTimeLimitMs,
-            state.turnStartedAt,
-            None,
-            state.model_dump_json(),
-            now,
-            now,
-            state.hostPlayerId,
-            _dump([]),
-        ),
+    await Room.create(
+        id=room_id, password_hash=password_hash, creator_token_hash=creator_token_hash,
+        settings_json=settings.model_dump_json(), phase=state.phase,
+        free_char=state.freeChar, required_start_char=state.requiredStartChar,
+        state_json=state.model_dump_json(), created_at=now, updated_at=now,
+        host_player_id=None, round_roster_json="[]",
     )
     if settings.mode == "team":
         for i in range(settings.teamCount):
             team_id = generate_uuid()
-            await conn.execute(
-                "INSERT INTO teams (id, room_id, sort_order) VALUES (?, ?, ?)",
-                (team_id, room_id, i),
-            )
-            state.teams.append(Team(id=team_id, sortOrder=i))
-        await conn.execute(
-            "UPDATE rooms SET state_json = ? WHERE id = ?",
-            (state.model_dump_json(), room_id),
-        )
-    await conn.commit()
+            await Team.create(id=team_id, room_id=room_id, sort_order=i)
+            state.teams.append(TeamState(id=team_id, sortOrder=i))
+        room = await Room.get(id=room_id)
+        room.state_json = state.model_dump_json()
+        await room.save(update_fields=["state_json"])
     return state
 
 
-async def get_room(conn: aiosqlite.Connection, room_id: str) -> aiosqlite.Row | None:
-    async with conn.execute("SELECT * FROM rooms WHERE id = ?", (room_id,)) as cursor:
-        return await cursor.fetchone()
+async def get_room(room_id):
+    room = await Room.get_or_none(id=room_id)
+    return _room_row(room) if room else None
 
 
-async def room_exists(conn: aiosqlite.Connection, room_id: str) -> bool:
-    async with conn.execute(
-        "SELECT 1 FROM rooms WHERE id = ?", (room_id,)
-    ) as cursor:
-        return await cursor.fetchone() is not None
+async def delete_room(room_id):
+    await Room.filter(id=room_id).delete()
 
 
-async def delete_room(conn: aiosqlite.Connection, room_id: str) -> None:
-    await conn.execute("DELETE FROM rooms WHERE id = ?", (room_id,))
-    await conn.commit()
+async def list_players(room_id):
+    return [_player_row(p) for p in await Player.filter(room_id=room_id).order_by("sort_order")]
 
 
-async def list_players(
-    conn: aiosqlite.Connection, room_id: str
-) -> list[aiosqlite.Row]:
-    async with conn.execute(
-        "SELECT * FROM players WHERE room_id = ? ORDER BY sort_order",
-        (room_id,),
-    ) as cursor:
-        return await cursor.fetchall()
+async def get_next_player_sort_order(room_id):
+    players = await Player.filter(room_id=room_id).order_by("-sort_order").limit(1)
+    return (players[0].sort_order if players else 0) + 1
 
 
-async def list_teams(conn: aiosqlite.Connection, room_id: str) -> list[aiosqlite.Row]:
-    async with conn.execute(
-        "SELECT * FROM teams WHERE room_id = ? ORDER BY sort_order", (room_id,)
-    ) as cursor:
-        return await cursor.fetchall()
-
-
-async def get_next_player_sort_order(
-    conn: aiosqlite.Connection, room_id: str
-) -> int:
-    async with conn.execute(
-        "SELECT MAX(sort_order) AS m FROM players WHERE room_id = ?", (room_id,)
-    ) as cursor:
-        row = await cursor.fetchone()
-    return (row["m"] or 0) + 1
-
-
-async def load_room_state(
-    conn: aiosqlite.Connection, room_id: str
-) -> GameState | None:
-    """ルームの最新ゲーム状態を読み込む。"""
-    row = await get_room(conn, room_id)
-    if row is None:
+async def load_room_state(room_id):
+    room = await Room.get_or_none(id=room_id)
+    if room is None:
         return None
-    state = GameState.model_validate(_load(row["state_json"]))
-    state.hasPassword = bool(row["password_hash"])
-    # DB側の接続状態を反映する
-    db_players = {p["id"]: p for p in await list_players(conn, room_id)}
+    state = GameState.model_validate(_load(room.state_json))
+    state.hasPassword = bool(room.password_hash)
+    db_players = {p["id"]: p for p in await list_players(room_id)}
     for player in state.players:
         dbp = db_players.get(player.id)
         if dbp:
             player.connectionStatus = dbp["connection_status"]
             player.disconnectedAt = dbp["disconnected_at"]
-    # チームのメンバー一覧を再計算
     for team in state.teams:
-        team.memberPlayerIds = [
-            p.id for p in state.players if p.teamId == team.id
-        ]
+        team.memberPlayerIds = [p.id for p in state.players if p.teamId == team.id]
     return state
 
 
-async def save_room_state(
-    conn: aiosqlite.Connection, room_id: str, state: GameState
-) -> None:
-    """ルーム状態と所属プレイヤー・チーム行をSQLiteに保存する。"""
-    now = now_ms()
-    current_player_id = (
-        state.currentPlayerId if state.settings.mode == "individual" else None
-    )
-    current_team_id = (
-        state.currentTeamId if state.settings.mode == "team" else None
-    )
-    result_json = state.result.model_dump_json() if state.result else None
-    await conn.execute(
-        """
-        UPDATE rooms SET
-            settings_json = ?,
-            phase = ?,
-            free_char = ?,
-            current_player_id = ?,
-            current_team_id = ?,
-            required_start_char = ?,
-            round = ?,
-            order_index = ?,
-            remaining_time_ms = ?,
-            current_turn_time_limit_ms = ?,
-            turn_started_at = ?,
-            result_json = ?,
-            state_json = ?,
-            updated_at = ?,
-            host_player_id = ?,
-            round_roster_json = ?
-        WHERE id = ?
-        """,
-        (
-            state.settings.model_dump_json(),
-            state.phase,
-            state.freeChar,
-            current_player_id,
-            current_team_id,
-            state.requiredStartChar,
-            state.round,
-            state.orderIndex,
-            state.remainingTimeMs,
-            state.currentTurnTimeLimitMs,
-            state.turnStartedAt,
-            result_json,
-            state.model_dump_json(),
-            now,
-            state.hostPlayerId,
-            _dump(state.roundRoster),
-            room_id,
-        ),
-    )
+async def save_room_state(room_id, state):
+    room = await Room.get(id=room_id)
+    room.settings_json = state.settings.model_dump_json()
+    room.phase = state.phase
+    room.free_char = state.freeChar
+    room.current_player_id = state.currentPlayerId if state.settings.mode == "individual" else None
+    room.current_team_id = state.currentTeamId if state.settings.mode == "team" else None
+    room.required_start_char = state.requiredStartChar
+    room.round = state.round
+    room.order_index = state.orderIndex
+    room.remaining_time_ms = state.remainingTimeMs
+    room.current_turn_time_limit_ms = state.currentTurnTimeLimitMs
+    room.turn_started_at = state.turnStartedAt
+    room.result_json = state.result.model_dump_json() if state.result else None
+    room.state_json = state.model_dump_json()
+    room.updated_at = now_ms()
+    room.host_player_id = state.hostPlayerId
+    room.round_roster_json = _dump(state.roundRoster)
+    await room.save()
+
+    state_ids = {p.id for p in state.players}
     for player in state.players:
-        async with conn.execute(
-            "SELECT 1 FROM players WHERE id = ?", (player.id,)
-        ) as cursor:
-            exists = await cursor.fetchone() is not None
-        if exists:
-            await conn.execute(
-                """
-                UPDATE players SET
-                    room_id = ?, name = ?, status = ?, card_json = ?,
-                    bingo_line_ids_json = ?, opened_cell_count = ?, sort_order = ?,
-                    team_id = ?, connection_status = ?, disconnected_at = ?
-                WHERE id = ?
-                """,
-                (
-                    room_id,
-                    player.name,
-                    player.status,
-                    player.card.model_dump_json() if player.card else None,
-                    _dump(player.bingoLineIds or []),
-                    player.openedCellCount,
-                    player.sortOrder,
-                    player.teamId,
-                    player.connectionStatus,
-                    player.disconnectedAt,
-                    player.id,
-                ),
-            )
-        else:
-            await conn.execute(
-                """
-                INSERT INTO players (
-                    id, room_id, name, status, card_json, bingo_line_ids_json,
-                    opened_cell_count, sort_order, team_id, connection_status, disconnected_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    player.id,
-                    room_id,
-                    player.name,
-                    player.status,
-                    player.card.model_dump_json() if player.card else None,
-                    _dump(player.bingoLineIds or []),
-                    player.openedCellCount,
-                    player.sortOrder,
-                    player.teamId,
-                    player.connectionStatus,
-                    player.disconnectedAt,
-                ),
-            )
-    db_player_ids = {p["id"] for p in await list_players(conn, room_id)}
-    state_player_ids = {p.id for p in state.players}
-    for pid in db_player_ids - state_player_ids:
-        await conn.execute("DELETE FROM players WHERE id = ?", (pid,))
-        await conn.execute("DELETE FROM player_sessions WHERE player_id = ?", (pid,))
+        await Player.update_or_create(
+            id=player.id,
+            defaults={
+                "room_id": room_id, "name": player.name, "status": player.status,
+                "card_json": player.card.model_dump_json() if player.card else None,
+                "bingo_line_ids_json": _dump(player.bingoLineIds or []),
+                "opened_cell_count": player.openedCellCount, "sort_order": player.sortOrder,
+                "team_id": player.teamId, "connection_status": player.connectionStatus,
+                "disconnected_at": player.disconnectedAt,
+            },
+        )
+    for player in await Player.filter(room_id=room_id).exclude(id__in=state_ids):
+        await PlayerSession.filter(player_id=player.id).delete()
+        await player.delete()
 
-    for team in state.teams:
-        async with conn.execute(
-            "SELECT 1 FROM teams WHERE id = ?", (team.id,)
-        ) as cursor:
-            exists = await cursor.fetchone() is not None
-        if exists:
-            await conn.execute(
-                """
-                UPDATE teams SET
-                    room_id = ?, sort_order = ?, status = ?, card_json = ?,
-                    bingo_line_ids_json = ?, opened_cell_count = ?
-                WHERE id = ?
-                """,
-                (
-                    room_id,
-                    team.sortOrder,
-                    team.status,
-                    team.card.model_dump_json() if team.card else None,
-                    _dump(team.bingoLineIds or []),
-                    team.openedCellCount,
-                    team.id,
-                ),
-            )
-        else:
-            await conn.execute(
-                """
-                INSERT INTO teams (
-                    id, room_id, sort_order, status, card_json, bingo_line_ids_json,
-                    opened_cell_count
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    team.id,
-                    room_id,
-                    team.sortOrder,
-                    team.status,
-                    team.card.model_dump_json() if team.card else None,
-                    _dump(team.bingoLineIds or []),
-                    team.openedCellCount,
-                ),
-            )
-    db_team_ids = {t["id"] for t in await list_teams(conn, room_id)}
     state_team_ids = {t.id for t in state.teams}
-    for tid in db_team_ids - state_team_ids:
-        await conn.execute("DELETE FROM teams WHERE id = ?", (tid,))
-
-    await conn.commit()
-
-
-async def create_session(
-    conn: aiosqlite.Connection,
-    session_id: str,
-    room_id: str,
-    player_id: str,
-    token_hash: str,
-) -> None:
-    now = now_ms()
-    await conn.execute(
-        """
-        INSERT INTO player_sessions (
-            id, room_id, player_id, token_hash, active_connections, last_seen_at, disconnected_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (session_id, room_id, player_id, token_hash, 0, now, None),
-    )
-    await conn.commit()
+    for team in state.teams:
+        await Team.update_or_create(
+            id=team.id,
+            defaults={
+                "room_id": room_id, "sort_order": team.sortOrder, "status": team.status,
+                "card_json": team.card.model_dump_json() if team.card else None,
+                "bingo_line_ids_json": _dump(team.bingoLineIds or []),
+                "opened_cell_count": team.openedCellCount,
+            },
+        )
+    await Team.filter(room_id=room_id).exclude(id__in=state_team_ids).delete()
 
 
-async def get_session_by_token_hash(
-    conn: aiosqlite.Connection, token_hash: str
-) -> aiosqlite.Row | None:
-    async with conn.execute(
-        "SELECT * FROM player_sessions WHERE token_hash = ?", (token_hash,)
-    ) as cursor:
-        return await cursor.fetchone()
+async def create_session(session_id, room_id, player_id, token_hash):
+    await PlayerSession.create(id=session_id, room_id=room_id, player_id=player_id,
+                               token_hash=token_hash, last_seen_at=now_ms())
 
 
-async def update_session_connections(
-    conn: aiosqlite.Connection,
-    session_id: str,
-    delta: int,
-) -> int:
-    """接続数を増減し、新しい接続数を返す。"""
-    now = now_ms()
-    async with conn.execute(
-        "SELECT active_connections FROM player_sessions WHERE id = ?",
-        (session_id,),
-    ) as cursor:
-        row = await cursor.fetchone()
-    if row is None:
+def _session_row(session: PlayerSession) -> dict:
+    return {"id": session.id, "room_id": session.room_id, "player_id": session.player_id,
+            "token_hash": session.token_hash, "active_connections": session.active_connections,
+            "last_seen_at": session.last_seen_at, "disconnected_at": session.disconnected_at}
+
+
+async def get_session_by_token_hash(token_hash):
+    session = await PlayerSession.get_or_none(token_hash=token_hash)
+    return _session_row(session) if session else None
+
+
+async def update_session_connections(session_id, delta):
+    session = await PlayerSession.get_or_none(id=session_id)
+    if session is None:
         return 0
-    new_count = max(0, row["active_connections"] + delta)
-    disconnected_at = now if new_count == 0 else None
-    await conn.execute(
-        """
-        UPDATE player_sessions
-        SET active_connections = ?, last_seen_at = ?, disconnected_at = ?
-        WHERE id = ?
-        """,
-        (new_count, now, disconnected_at, session_id),
+    session.active_connections = max(0, session.active_connections + delta)
+    session.last_seen_at = now_ms()
+    session.disconnected_at = now_ms() if session.active_connections == 0 else None
+    await session.save()
+    return session.active_connections
+
+
+async def set_player_connection_status(player_id, connected):
+    await Player.filter(id=player_id).update(
+        connection_status="connected" if connected else "disconnected",
+        disconnected_at=None if connected else now_ms(),
     )
-    await conn.commit()
-    return new_count
 
 
-async def set_player_connection_status(
-    conn: aiosqlite.Connection,
-    player_id: str,
-    connected: bool,
-) -> None:
-    now = now_ms()
-    if connected:
-        await conn.execute(
-            "UPDATE players SET connection_status = ?, disconnected_at = ? WHERE id = ?",
-            ("connected", None, player_id),
-        )
-    else:
-        await conn.execute(
-            "UPDATE players SET connection_status = ?, disconnected_at = ? WHERE id = ?",
-            ("disconnected", now, player_id),
-        )
-    await conn.commit()
+async def delete_player(player_id):
+    await Player.filter(id=player_id).delete()
 
 
-async def delete_player(conn: aiosqlite.Connection, player_id: str) -> None:
-    await conn.execute("DELETE FROM players WHERE id = ?", (player_id,))
-    await conn.execute("DELETE FROM player_sessions WHERE player_id = ?", (player_id,))
-    await conn.commit()
+async def add_word_history(room_id, entry):
+    await WordHistory.create(room_id=room_id, player_id=entry.playerId, word=entry.word,
+                             round=entry.round, sequence=entry.sequence,
+                             opened_chars_json=_dump(entry.openedChars), created_at=now_ms())
 
 
-async def transfer_host(
-    conn: aiosqlite.Connection, room_id: str, new_host_id: str | None
-) -> None:
-    now = now_ms()
-    await conn.execute(
-        "UPDATE rooms SET host_player_id = ?, updated_at = ? WHERE id = ?",
-        (new_host_id, now, room_id),
-    )
-    await conn.commit()
-
-
-async def add_word_history(
-    conn: aiosqlite.Connection, room_id: str, entry: WordEntry
-) -> None:
-    now = now_ms()
-    await conn.execute(
-        """
-        INSERT INTO word_history (
-            room_id, player_id, word, round, sequence, opened_chars_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            room_id,
-            entry.playerId,
-            entry.word,
-            entry.round,
-            entry.sequence,
-            _dump(entry.openedChars),
-            now,
-        ),
-    )
-    await conn.commit()
-
-
-async def sync_word_history(
-    conn: aiosqlite.Connection, room_id: str, entries: list[WordEntry]
-) -> None:
-    """word_history をゲーム状態の wordHistory と一致させる。"""
-    await conn.execute("DELETE FROM word_history WHERE room_id = ?", (room_id,))
-    now = now_ms()
+async def sync_word_history(room_id, entries):
+    await WordHistory.filter(room_id=room_id).delete()
     for entry in entries:
-        await conn.execute(
-            """
-            INSERT INTO word_history (
-                room_id, player_id, word, round, sequence, opened_chars_json, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                room_id,
-                entry.playerId,
-                entry.word,
-                entry.round,
-                entry.sequence,
-                _dump(entry.openedChars),
-                now,
-            ),
-        )
-    await conn.commit()
+        await add_word_history(room_id, entry)
 
 
-async def add_undo_snapshot(
-    conn: aiosqlite.Connection, room_id: str, snapshot: UndoSnapshot
-) -> None:
-    now = now_ms()
-    await conn.execute(
-        """
-        INSERT INTO undo_snapshots (room_id, snapshot_json, restored_turn_time_limit_ms, created_at)
-        VALUES (?, ?, ?, ?)
-        """,
-        (
-            room_id,
-            snapshot.gameStateBeforeAction.model_dump_json(),
-            snapshot.restoredTurnTimeLimitMs,
-            now,
-        ),
-    )
-    await conn.commit()
+async def add_undo_snapshot(room_id, snapshot):
+    await UndoSnapshotRow.create(room_id=room_id,
+                                 snapshot_json=snapshot.gameStateBeforeAction.model_dump_json(),
+                                 restored_turn_time_limit_ms=snapshot.restoredTurnTimeLimitMs,
+                                 created_at=now_ms())
 
 
-async def pop_undo_snapshot(
-    conn: aiosqlite.Connection, room_id: str
-) -> UndoSnapshot | None:
-    """最新の undo スナップショットを削除して返す。"""
-    async with conn.execute(
-        "SELECT * FROM undo_snapshots WHERE room_id = ? ORDER BY id DESC LIMIT 1",
-        (room_id,),
-    ) as cursor:
-        row = await cursor.fetchone()
+async def pop_undo_snapshot(room_id):
+    row = await UndoSnapshotRow.filter(room_id=room_id).order_by("-id").first()
     if row is None:
         return None
-    await conn.execute("DELETE FROM undo_snapshots WHERE id = ?", (row["id"],))
-    await conn.commit()
-    return UndoSnapshot.model_validate(
-        {
-            "gameStateBeforeAction": _load(row["snapshot_json"]),
-            "restoredTurnTimeLimitMs": row["restored_turn_time_limit_ms"],
-        }
-    )
+    await row.delete()
+    return UndoSnapshot.model_validate({"gameStateBeforeAction": _load(row.snapshot_json),
+                                        "restoredTurnTimeLimitMs": row.restored_turn_time_limit_ms})
 
 
-async def load_undo_snapshots(
-    conn: aiosqlite.Connection, room_id: str
-) -> list[UndoSnapshot]:
-    async with conn.execute(
-        "SELECT * FROM undo_snapshots WHERE room_id = ? ORDER BY id",
-        (room_id,),
-    ) as cursor:
-        rows = await cursor.fetchall()
-    snapshots: list[UndoSnapshot] = []
-    for row in rows:
-        snapshots.append(
-            UndoSnapshot.model_validate(
-                {
-                    "gameStateBeforeAction": _load(row["snapshot_json"]),
-                    "restoredTurnTimeLimitMs": row["restored_turn_time_limit_ms"],
-                }
-            )
-        )
-    return snapshots
+async def delete_word_history_for_room(room_id):
+    await WordHistory.filter(room_id=room_id).delete()
 
 
-async def delete_word_history_for_room(
-    conn: aiosqlite.Connection, room_id: str
-) -> None:
-    await conn.execute("DELETE FROM word_history WHERE room_id = ?", (room_id,))
-    await conn.commit()
+async def delete_undo_snapshots_for_room(room_id):
+    await UndoSnapshotRow.filter(room_id=room_id).delete()
 
 
-async def delete_undo_snapshots_for_room(
-    conn: aiosqlite.Connection, room_id: str
-) -> None:
-    await conn.execute("DELETE FROM undo_snapshots WHERE room_id = ?", (room_id,))
-    await conn.commit()
+async def list_rooms_updated_before(timestamp_ms):
+    return [r.id for r in await Room.filter(updated_at__lt=timestamp_ms)]
 
 
-async def list_rooms_updated_before(
-    conn: aiosqlite.Connection, timestamp_ms: int
-) -> list[str]:
-    async with conn.execute(
-        "SELECT id FROM rooms WHERE updated_at < ?", (timestamp_ms,)
-    ) as cursor:
-        rows = await cursor.fetchall()
-    return [row["id"] for row in rows]
+async def list_disconnected_players_to_remove(phase, before_ms):
+    rooms = {r.id for r in await Room.filter(phase=phase)}
+    return [(p.room_id, p.id) for p in await Player.filter(room_id__in=rooms,
+        connection_status="disconnected", disconnected_at__lt=before_ms)]
 
 
-async def list_disconnected_players_to_remove(
-    conn: aiosqlite.Connection, phase: str, before_ms: int
-) -> list[tuple[str, str]]:
-    """削除対象の (room_id, player_id) 一覧を返す。"""
-    async with conn.execute(
-        """
-        SELECT p.room_id, p.id
-        FROM players p
-        JOIN rooms r ON p.room_id = r.id
-        WHERE r.phase = ?
-          AND p.connection_status = 'disconnected'
-          AND p.disconnected_at < ?
-        """,
-        (phase, before_ms),
-    ) as cursor:
-        rows = await cursor.fetchall()
-    return [(row["room_id"], row["id"]) for row in rows]
+async def list_empty_rooms(before_ms):
+    rooms = await Room.filter(updated_at__lt=before_ms)
+    result = []
+    for room in rooms:
+        if not await Player.filter(room_id=room.id).exists():
+            result.append(room.id)
+    return result
 
 
-async def list_empty_rooms(
-    conn: aiosqlite.Connection, before_ms: int
-) -> list[str]:
-    """プレイヤーが0人かつ before_ms より前に更新されたルームID一覧を返す。"""
-    async with conn.execute(
-        """
-        SELECT r.id
-        FROM rooms r
-        LEFT JOIN players p ON r.id = p.room_id
-        WHERE p.id IS NULL
-          AND r.updated_at < ?
-        """,
-        (before_ms,),
-    ) as cursor:
-        rows = await cursor.fetchall()
-    return [row["id"] for row in rows]
+async def list_playing_rooms():
+    return [r.id for r in await Room.filter(phase="playing")]
+
+
+async def delete_teams(room_id):
+    await Team.filter(room_id=room_id).delete()
+
+
+async def create_team(room_id, team_id, sort_order):
+    await Team.create(id=team_id, room_id=room_id, sort_order=sort_order)

@@ -10,8 +10,10 @@ RUN pip install --no-cache-dir uv \
     && uv sync --locked --no-dev
 
 COPY app ./app
+COPY migrations ./migrations
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data \
+    && uv run --no-sync aerich upgrade
 
 EXPOSE 3000
 

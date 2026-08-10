@@ -3,6 +3,21 @@ revision = 3
 requires-python = ">=3.14"
 
 [[package]]
+name = "aerich"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "asyncclick" },
+    { name = "dictdiffer" },
+    { name = "tortoise-orm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fd/9c/7f7737ea55c97d110c6984553cb9b585f1c1eafe7cc7d1be76b919f37350/aerich-0.10.0.tar.gz", hash = "sha256:8d3eb966b1c8b099ae0602b7ffe25089ba604bc8a322726ece081939dd693376", size = 90941, upload-time = "2026-08-05T15:34:20.949Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/be/aa8a015555e991e1c76b115094f6e140005fc7a8a272d3d09f5c5feb36b6/aerich-0.10.0-py3-none-any.whl", hash = "sha256:b665653d111fb01ce85e4bf7a27c9496473c689aaeaf6a5f2a75845d7558671b", size = 49558, upload-time = "2026-08-05T15:34:19.679Z" },
+]
+
+[[package]]
 name = "aiosqlite"
 version = "0.22.1"
 source = { registry = "https://pypi.org/simple" }
@@ -39,6 +54,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/61/cc/a381afa6efea9f496eff839d4a6a1aed3bfafc7b3ab4b0d1b243a12573dd/anyio-4.14.2.tar.gz", hash = "sha256:cfa139f3ed1a23ee8f88a145ddb5ac7605b8bbfd8592baacd7ce3d8bb4313c7f", size = 260176, upload-time = "2026-07-12T20:29:07.082Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/35/f2287558c17e29fafc8ef3daf819bb9834061cfa43bff8014f7df7f63bdc/anyio-4.14.2-py3-none-any.whl", hash = "sha256:9f505dda5ac9f0c8309b5e8bd445a8c2bf7246f3ce950121e45ea15bc41d1494", size = 125813, upload-time = "2026-07-12T20:29:05.763Z" },
+]
+
+[[package]]
+name = "asyncclick"
+version = "8.4.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fd/b2/2c90a32d9b9cf1a4a90ed39cc1177890d146f3f89ae375b061d72110659a/asyncclick-8.4.2.1.tar.gz", hash = "sha256:8f259376ae8d4fcd91961c8ad3e85e9b63c9cf181a122201c7dfed3d7f6024b8", size = 340830, upload-time = "2026-06-30T12:40:33.842Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a7/44/ee9baab53fe4ff487fa47a1c50b174d3b3fb583cf2e22ff5ee33f61be899/asyncclick-8.4.2.1-py3-none-any.whl", hash = "sha256:dbd533769c4e3ce831c05394027ea1cd606c09688e18abab13dbcfbf7dc5a142", size = 121917, upload-time = "2026-06-30T12:40:32.213Z" },
 ]
 
 [[package]]
@@ -114,6 +141,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5f/ce/6897d812825e9d4c53e3c7112726e800cc5231b013b2223bf64f653ff362/detect_installer-0.1.0.tar.gz", hash = "sha256:00ad7ba0a36e3cf7d08a40d3643011746dbc112597c7d475cc91c416710ca4e7", size = 3049, upload-time = "2026-02-23T10:40:22.567Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/34/8cc73273414405086c58852916e4031812a6a30fe04c057e37ad99397b7f/detect_installer-0.1.0-py3-none-any.whl", hash = "sha256:034fb20fd665c36e6ba52b8821525ea07fb4f7f938cac459df889fb33801528a", size = 4539, upload-time = "2026-02-23T10:40:23.807Z" },
+]
+
+[[package]]
+name = "dictdiffer"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0c/31/84b2b2113c2c972431582bffd74f0d04b5efd9126538127b766275580950/dictdiffer-0.10.0.tar.gz", hash = "sha256:0b912acf663949d73b820d3ed59362140a188ab742c94efe13c762dbd24cbbd3", size = 12451, upload-time = "2026-07-16T12:39:07.886Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9c/2f/7ff60ad2cafd7c970bea75da5f4a9b84b784f7340abcb5fc634d4cf5cd37/dictdiffer-0.10.0-py3-none-any.whl", hash = "sha256:6ca50f38f7c5ee27d52789eee095ae473d9e02e1aa7612cb3aaf25fcf081dbf6", size = 16060, upload-time = "2026-07-16T12:39:06.842Z" },
 ]
 
 [[package]]
@@ -325,6 +361,15 @@ wheels = [
 ]
 
 [[package]]
+name = "iso8601"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b9/f3/ef59cee614d5e0accf6fd0cbba025b93b272e626ca89fb70a3e9187c5d15/iso8601-2.1.0.tar.gz", hash = "sha256:6b1d3829ee8921c4301998c909f7829fa9ed3cbdac0d3b16af2d743aed1ba8df", size = 6522, upload-time = "2023-10-03T00:25:39.317Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/0c/f37b6a241f0759b7653ffa7213889d89ad49a2b76eb2ddf3b57b2738c347/iso8601-2.1.0-py3-none-any.whl", hash = "sha256:aac4145c4dcb66ad8b648a02830f5e2ff6c24af20f4f482689be402db2429242", size = 7545, upload-time = "2023-10-03T00:25:32.304Z" },
+]
+
+[[package]]
 name = "jinja2"
 version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -503,6 +548,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pypika-tortoise"
+version = "0.6.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c2/06/89fe5fff93c5a01dbdeb9f3d843a7e997dc6e3a87222a260a164ff91fb81/pypika_tortoise-0.6.5.tar.gz", hash = "sha256:64d96c9b88450f6360ad22a7063933b6a90961a7317f04b2b63c98fd5d705506", size = 81468, upload-time = "2026-03-13T20:44:54.439Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/b8/502910eb8b315f719d8f6a6509f13a38b6c4c05378f14ac151ff347bff0a/pypika_tortoise-0.6.5-py3-none-any.whl", hash = "sha256:9194ac6ce6ac9bdfc6e959c831c5788ef05ee1371e82ba281b0eb75f4a2bd4f1", size = 47936, upload-time = "2026-03-13T20:44:53.541Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "8.4.2"
 source = { registry = "https://pypi.org/simple" }
@@ -534,6 +588,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5b/42/55c32bb9b12693c092ad250a0e82edb5b31ddeda6eb772de5f308b3804ad/python_multipart-0.0.32.tar.gz", hash = "sha256:be54b7f3fa167bb83e4fcd936b887b708f4e57fe75911c02aebf53efaf8d938e", size = 46881, upload-time = "2026-06-04T16:18:58.647Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/04/e8135ebd1ad02c56ec633277529b2602ff99ff634be76cdba5744cf554fd/python_multipart-0.0.32-py3-none-any.whl", hash = "sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23", size = 30042, upload-time = "2026-06-04T16:18:57.319Z" },
+]
+
+[[package]]
+name = "pytz"
+version = "2026.3.post1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fb/48/fb042503b6ca6cd271261dc559fd6432f7d8c713153e9ec5c591af4dfc1c/pytz-2026.3.post1.tar.gz", hash = "sha256:2211d3fcf9a797d3405cac96ac7f61d80e6a644f72a3309607282fe8a2010c5d", size = 319745, upload-time = "2026-07-25T15:12:07.385Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0f/7b/39c34ca613b0b198cb866466651b26b045e2009864c5183c979a3b83f383/pytz-2026.3.post1-py2.py3-none-any.whl", hash = "sha256:dd95840dd199baea12d9cc096a1d452caa6596a1c1e4b5f3dbd1541855d5e815", size = 508283, upload-time = "2026-07-25T15:12:05.782Z" },
 ]
 
 [[package]]
@@ -713,9 +776,10 @@ name = "shiritori-bingo-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "aiosqlite" },
+    { name = "aerich" },
     { name = "bcrypt" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "tortoise-orm" },
 ]
 
 [package.dev-dependencies]
@@ -726,9 +790,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiosqlite", specifier = ">=0.21.0,<1.0.0" },
+    { name = "aerich", specifier = ">=0.9.2,<1.0.0" },
     { name = "bcrypt", specifier = ">=4.3.0,<5.0.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.116.1,<1.0.0" },
+    { name = "tortoise-orm", specifier = ">=0.25.1,<1.0.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -747,6 +812,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b5/b4/205b0d5241d934e8add0c38aa924c4f9fb7330834ff11e5444db964ec3f9/starlette-1.6.0.tar.gz", hash = "sha256:d4e3ac5e546444960c710297a3c9fc3f7ebae1b7e963f3d36173b49da535be9b", size = 2716969, upload-time = "2026-08-08T18:27:57.512Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/cb/6a6a47d5b464bd08695d254f3da6e7986cc70c9fa5d778eda57538edfe56/starlette-1.6.0-py3-none-any.whl", hash = "sha256:a86dd39d14bb45f85a3d18525215a9ef0cfd1f192ac793220e72598c90335f0c", size = 75969, upload-time = "2026-08-08T18:27:56.196Z" },
+]
+
+[[package]]
+name = "tortoise-orm"
+version = "0.25.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiosqlite" },
+    { name = "anyio" },
+    { name = "iso8601", marker = "python_full_version < '4'" },
+    { name = "pypika-tortoise" },
+    { name = "pytz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/44/8a75e91a5d0e2e2545485de3e084fac1f4ff2ba4859e39240fa204c748d5/tortoise_orm-0.25.4.tar.gz", hash = "sha256:88c231ebe158f1287fc9c9497313f9a46cfb70b66c458ba39900921a4e52d01b", size = 232871, upload-time = "2026-02-02T17:57:10.825Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/af/8c/c5825518f67fb9042c4020c272f4c872e10ea5358424e087eb943cef6561/tortoise_orm-0.25.4-py3-none-any.whl", hash = "sha256:a699e629632abf760d14794e8afd3579a9c844623d50a58a6fbdcd6f52b5a37d", size = 168512, upload-time = "2026-02-02T17:57:08.776Z" },
 ]
 
 [[package]]

@@ -10,5 +10,5 @@ services:
     ports:
       - "${PORT:-3001}:3000"
     volumes:
-      - ./data:/app/data
+      - ./backend/data:/app/data
     restart: unless-stopped
