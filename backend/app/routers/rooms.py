@@ -187,9 +187,14 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
         sortOrder=sort_order,
     )
     state.players.append(player)
+    host_changed = False
     if state.hostPlayerId is None:
         state.hostPlayerId = player_id
         is_host = True
+    elif is_creator:
+        state.hostPlayerId = player_id
+        is_host = True
+        host_changed = True
 
     await dao.save_room_state(conn, room_id, state)
     session_id = dao.generate_uuid()
@@ -197,7 +202,11 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
     await dao.create_session(
         conn, session_id, room_id, player_id, security.hash_token(new_token)
     )
-    await broadcast.broadcast(room_id, state)
+    await broadcast.broadcast(
+        room_id,
+        state,
+        notice="親が変更されました。" if host_changed else None,
+    )
     response = JSONResponse(
         status_code=200,
         content={

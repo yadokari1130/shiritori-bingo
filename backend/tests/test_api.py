@@ -504,3 +504,29 @@ def test_room_without_password():
         assert join_res.status_code == 200
 
 
+def test_creator_late_join_takes_host():
+    settings = Settings(cardSize=3)
+    with TestClient(app) as creator, TestClient(app) as joiner:
+        # 作成者がルームを作成
+        res = creator.post(
+            "/api/rooms",
+            json={"settings": settings.model_dump()},
+        )
+        assert res.status_code == 200
+        room_id = res.json()["roomId"]
+
+        # 他の参加者が先に部屋に参加 -> 一時的にホストになる
+        r1 = joiner.post(f"/api/rooms/{room_id}/join", json={"name": "一般参加者"})
+        assert r1.status_code == 200
+        joiner_pid = r1.json()["playerId"]
+        assert r1.json()["isHost"] is True
+        assert r1.json()["gameState"]["hostPlayerId"] == joiner_pid
+
+        # 部屋の作成者が後から参加 -> 自動的にホストが作成者に切り替わる
+        r2 = creator.post(f"/api/rooms/{room_id}/join", json={"name": "部屋作成者"})
+        assert r2.status_code == 200
+        creator_pid = r2.json()["playerId"]
+        assert r2.json()["isHost"] is True
+        assert r2.json()["gameState"]["hostPlayerId"] == creator_pid
+
+
