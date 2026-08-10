@@ -262,6 +262,26 @@ def is_valid_word_length(word: str, settings: Settings) -> bool:
     return settings.maxWordLength is None or length <= settings.maxWordLength
 
 
+def get_word_invalid_reason(state: GameState, word: str) -> str | None:
+    """ゲームルール上の無効理由を固定文で返す。"""
+    if not is_valid_word_length(word, state.settings):
+        return "設定された文字数の範囲外です。"
+    if word in state.usedWords:
+        return "この単語はすでに使われています。"
+    if not state.wordHistory:
+        if word[0] != state.freeChar:
+            return "前の単語の最後の文字から始まっていません。"
+    else:
+        last_word = state.wordHistory[-1].word
+        tail, valid = normalize_tail(last_word)
+        if not valid or not is_connected(tail, word[0]):
+            return "前の単語の最後の文字から始まっていません。"
+    _, valid = normalize_tail(word)
+    if not valid:
+        return "「ん」で終わる単語は使えません。"
+    return None
+
+
 def _current_subject_id(state: GameState) -> str | None:
     if state.settings.mode == "individual":
         return state.currentPlayerId

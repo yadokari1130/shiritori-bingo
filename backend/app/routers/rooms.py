@@ -560,6 +560,7 @@ async def action(room_id: str, request: Request, body: ActionRequest):
             raise HTTPException(status_code=409, detail="対戦中ではありません")
 
         now = dao.now_ms()
+        notice: str | None = None
 
         if isinstance(body, WordAction):
             if not engine.is_valid_word_input(body.word):
@@ -568,6 +569,7 @@ async def action(room_id: str, request: Request, body: ActionRequest):
                 )
             try:
                 old_history_len = len(state.wordHistory)
+                invalid_reason = engine.get_word_invalid_reason(state, body.word)
                 engine.process_word(state, player_id, body.word, now)
                 if len(state.wordHistory) > old_history_len:
                     await dao.add_word_history(room_id, state.wordHistory[-1])
@@ -575,6 +577,16 @@ async def action(room_id: str, request: Request, body: ActionRequest):
                     await dao.add_undo_snapshot(
                         room_id, state.undoHistory[-1]
                     )
+                if invalid_reason:
+                    action_name = (
+                        "失格"
+                        if state.settings.invalidAction == "disqualify"
+                        else "ターンスキップ"
+                    )
+                    notice = f"{invalid_reason} {action_name}しました。"
+                else:
+                    opened_count = len(state.wordHistory[-1].openedChars)
+                    notice = f"「{body.word}」を受け付けました。{opened_count}マス開放。"
             except ValueError as exc:
                 raise HTTPException(status_code=403, detail=str(exc)) from exc
 
@@ -602,6 +614,11 @@ async def action(room_id: str, request: Request, body: ActionRequest):
                     await dao.add_undo_snapshot(
                         room_id, state.undoHistory[-1]
                     )
+                notice = (
+                    "手番をスキップしました。"
+                    if isinstance(body, SkipAction)
+                    else "手番を失格にしました。"
+                )
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -614,11 +631,12 @@ async def action(room_id: str, request: Request, body: ActionRequest):
                 state = engine.undo(state, now)
                 await dao.pop_undo_snapshot(room_id)
                 await dao.sync_word_history(room_id, state.wordHistory)
+                notice = "直前の操作を取り消しました。"
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         await dao.save_room_state(room_id, state)
-        await broadcast.broadcast(room_id, state)
+        await broadcast.broadcast(room_id, state, notice=notice)
     return JSONResponse(
         status_code=200, content={"success": True, "gameState": _public_state(state)}
     )
