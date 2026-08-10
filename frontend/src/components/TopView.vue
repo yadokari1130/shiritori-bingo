@@ -316,7 +316,7 @@ function extractRoomId(input: string): string {
                   >
                     {{ isJoining ? '参加中…' : '参加する' }}
                   </button>
-                  <button type="button" class="secondary-button" @click="onResetJoin">
+                  <button type="button" class="secondary-button ml-4" @click="onResetJoin">
                     キャンセル
                   </button>
                 </div>

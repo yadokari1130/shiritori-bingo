@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useGameStore } from '../store/game'
 import BingoCard from './BingoCard.vue'
 import { buildCharOpenStateColumns, collectOpenedChars } from '../utils/bingo'
+import { isSmallKana } from '../utils/shiritori'
 
 const store = useGameStore()
 
@@ -232,7 +233,10 @@ async function onReturnToLobby(): Promise<void> {
                   'is-blank': !char,
                 }"
               >
-                <span class="kana-character">{{ char ?? '' }}</span>
+                <span
+                  class="kana-character"
+                  :class="{ 'is-small-char': char ? isSmallKana(char) : false }"
+                >{{ char ?? '' }}</span>
               </div>
             </div>
           </div>
@@ -298,6 +302,43 @@ async function onReturnToLobby(): Promise<void> {
   padding-bottom: 8px;
 }
 
+.kana-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.kana-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kana-legend-mark {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #cfc5b7;
+  border-radius: 4px;
+  background: #f8f3e9;
+}
+
+.kana-legend-mark.is-open {
+  border-color: var(--teal);
+  background: var(--teal-pale);
+}
+
+.kana-legend-mark.is-closed {
+  background: #fffefa;
+}
+
+.kana-legend-mark.is-free {
+  border-color: var(--gold);
+  background: var(--gold-pale);
+}
+
 .kana-columns-box {
   display: flex;
   flex-direction: row-reverse;
@@ -315,24 +356,53 @@ async function onReturnToLobby(): Promise<void> {
 }
 
 .kana-col-header {
+  height: 20px;
+  line-height: 20px;
   font-size: 0.76rem;
   font-weight: 800;
   color: var(--muted);
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .kana-cell {
   width: 36px;
   height: 38px;
-  display: grid;
-  place-items: center;
+  min-width: 36px;
+  max-width: 36px;
+  min-height: 38px;
+  max-height: 38px;
+  box-sizing: border-box;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #cfc5b7;
   border-radius: 6px;
   background: #fffefa;
   font-size: 1.05rem;
   font-weight: 800;
   color: var(--ink);
+  line-height: 1;
+  flex-shrink: 0;
   transition: all 0.15s ease;
+}
+
+.kana-character {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  text-align: center;
+}
+
+.kana-character.is-small-char {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
 }
 
 .kana-cell.is-open {
@@ -347,8 +417,10 @@ async function onReturnToLobby(): Promise<void> {
 }
 
 .kana-cell.is-blank {
-  border-color: transparent;
+  border: 1px solid transparent;
   background: transparent;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 .history-grid {

@@ -3,6 +3,7 @@ import {
   buildCardCharPool,
   getFreeCharCandidates,
   isSameConnectionGroup,
+  isSmallKana,
   isValidInputChars,
   maxCardSize,
   normalizeTail,
@@ -148,6 +149,35 @@ describe('shiritori ユーティリティ', () => {
     it('最初の単語は濁点緩和なし', () => {
       const result = validateWordForFrontend('がっこう', 'か', true)
       expect(result.valid).toBe(false)
+    })
+  })
+
+  describe('isSmallKana', () => {
+    it('拗音（ゃ, ゅ, ょ）は true を返す', () => {
+      expect(isSmallKana('ゃ')).toBe(true)
+      expect(isSmallKana('ゅ')).toBe(true)
+      expect(isSmallKana('ょ')).toBe(true)
+    })
+
+    it('促音（っ）は true を返す', () => {
+      expect(isSmallKana('っ')).toBe(true)
+    })
+
+    it('小さいあ行（ぁ, ぃ, ぅ, ぇ, ぉ）は true を返す', () => {
+      expect(isSmallKana('ぁ')).toBe(true)
+      expect(isSmallKana('ぃ')).toBe(true)
+      expect(isSmallKana('ぅ')).toBe(true)
+      expect(isSmallKana('ぇ')).toBe(true)
+      expect(isSmallKana('ぉ')).toBe(true)
+    })
+
+    it('通常の清音・濁音・半濁音・伸ばし棒は false を返す', () => {
+      expect(isSmallKana('あ')).toBe(false)
+      expect(isSmallKana('つ')).toBe(false)
+      expect(isSmallKana('や')).toBe(false)
+      expect(isSmallKana('が')).toBe(false)
+      expect(isSmallKana('ぱ')).toBe(false)
+      expect(isSmallKana('ー')).toBe(false)
     })
   })
 })

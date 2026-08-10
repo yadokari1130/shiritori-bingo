@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { BingoCard as BingoCardType } from '../types'
 import { buildCellFlags } from '../utils/bingo'
+import { isSmallKana } from '../utils/shiritori'
 
 const props = withDefaults(
   defineProps<{
@@ -120,7 +121,10 @@ function cellLabel(flags: ReturnType<typeof buildCellFlags>[number], char: strin
         :aria-label="cellLabel(cellFlags[index], cell.char)"
         role="gridcell"
       >
-        <span class="cell-character">{{ cell.char }}</span>
+        <span
+          class="cell-character"
+          :class="{ 'is-small-char': isSmallKana(cell.char) }"
+        >{{ cell.char }}</span>
         <small v-if="cell.isFree" class="free-label">FREE</small>
         <span
           v-else-if="cellFlags[index].isReachHighlight && !cellFlags[index].isOpen"
@@ -296,6 +300,13 @@ function cellLabel(flags: ReturnType<typeof buildCellFlags>[number], char: strin
 .cell-character {
   position: relative;
   z-index: 1;
+}
+
+.cell-character.is-small-char {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
 }
 
 .free-label {

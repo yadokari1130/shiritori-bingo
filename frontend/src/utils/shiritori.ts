@@ -39,6 +39,18 @@ export const DAKUTEN_CHARS: readonly string[] = [
 /** 半濁音カテゴリ */
 export const HANDAKUTEN_CHARS: readonly string[] = ['ぱ', 'ぴ', 'ぷ', 'ぺ', 'ぽ']
 
+/** 小文字（拗音・促音・小さいあ行）の全文字 */
+export const SMALL_KANA_CHARS: readonly string[] = [
+  ...YOON_CHARS,
+  ...SOKUON_CHARS,
+  ...SMALL_A_CHARS,
+]
+
+/** 指定された1文字が小文字（拗音・促音・小さいあ行）かどうかを判定する */
+export function isSmallKana(char: string): boolean {
+  return SMALL_KANA_CHARS.includes(char)
+}
+
 /** カード文字候補を生成する。仕様 6.2, 6.3 */
 export function buildCardCharPool(options: {
   yoon: boolean

@@ -917,155 +917,7 @@ button:disabled {
   background: #fff8f5;
 }
 
-/* 五十音表 */
-.kana-chart-wrap {
-  overflow-x: auto;
-  margin: 0 -5px;
-  padding: 0 5px 3px;
-}
 
-.kana-chart-layout {
-  display: grid;
-  grid-template-columns: minmax(160px, 0.42fr) minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-
-.kana-chart {
-  width: 100%;
-  min-width: 460px;
-  border-collapse: separate;
-  border-spacing: 5px 4px;
-  table-layout: fixed;
-}
-
-.kana-chart td {
-  height: 44px;
-  padding: 0;
-}
-
-.kana-cell {
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 2px;
-  width: 100%;
-  min-width: 0;
-  min-height: 42px;
-  padding: 4px 2px;
-  border: 1px solid #cfc5b7;
-  border-radius: 8px;
-  background: #f8f3e9;
-  color: #8b8176;
-  line-height: 1.1;
-}
-
-.kana-cell.is-open {
-  border-color: var(--teal);
-  background: var(--teal-pale);
-  color: #075d5a;
-  font-weight: 800;
-}
-
-.kana-cell.is-closed {
-  background: #fffefa;
-  color: #6f655a;
-}
-
-.kana-cell.is-absent {
-  background: #f1ece7;
-  color: #a0978c;
-}
-
-.kana-cell.is-free {
-  border-color: var(--gold);
-  background: var(--gold-pale);
-  color: #71500d;
-  font-weight: 800;
-}
-
-.kana-cell.is-blank {
-  min-height: 0;
-  border-color: transparent;
-  background: transparent;
-}
-
-.kana-character {
-  font-size: 1.15rem;
-  font-weight: 900;
-}
-
-.kana-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px 14px;
-  margin: 0 0 12px;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.kana-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.kana-legend-mark {
-  width: 18px;
-  height: 18px;
-  border: 1px solid #cfc5b7;
-  border-radius: 4px;
-  background: #f8f3e9;
-}
-
-.kana-legend-mark.is-open {
-  border-color: var(--teal);
-  background: var(--teal-pale);
-}
-
-.kana-legend-mark.is-closed {
-  background: #fffefa;
-}
-
-.kana-legend-mark.is-absent {
-  background: #f1ece7;
-}
-
-.kana-legend-mark.is-free {
-  border-color: var(--gold);
-  background: var(--gold-pale);
-}
-
-.kana-extra-section {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-  padding: 0 12px 0 0;
-  border-right: 1px solid var(--line);
-}
-
-.kana-extra-groups {
-  display: grid;
-  gap: 10px;
-}
-
-.kana-extra-group {
-  display: grid;
-  gap: 4px;
-}
-
-.kana-extra-group h4 {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.kana-extra-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 4px;
-}
 
 /* レスポンシブ */
 @media (max-width: 1080px) {
@@ -1119,15 +971,8 @@ button:disabled {
   .field-grid,
   .field-grid.three,
   .options-grid,
-  .radio-row,
-  .kana-chart-layout {
+  .radio-row {
     grid-template-columns: 1fr;
-  }
-
-  .kana-extra-section {
-    padding: 0 0 12px 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
   }
 
   .side-panel {
@@ -1149,3 +994,12 @@ button:disabled {
     grid-column: span 2;
   }
 }
+
+/* 小文字（拗音・促音・小あ行）用アンダーライン共通スタイル */
+.is-small-char {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
