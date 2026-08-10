@@ -99,6 +99,7 @@ const orderedCards = computed(() => {
       .map((p) => ({
         id: p.id,
         title: p.name,
+        subtitle: undefined,
         card: p.card!,
         disqualified: p.status === 'disqualified',
       }))

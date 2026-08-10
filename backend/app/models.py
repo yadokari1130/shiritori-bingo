@@ -163,6 +163,7 @@ class GameState(BaseModel):
 
     phase: Literal["setup", "playing", "result"]
     settings: Settings
+    hasPassword: bool = False
     hostPlayerId: str | None = None
     freeChar: str = ""
     players: list[Player] = Field(default_factory=list)

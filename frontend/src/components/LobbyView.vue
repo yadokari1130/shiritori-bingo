@@ -69,7 +69,18 @@ function copyUrl(): void {
 }
 
 const isSubmittingName = ref(false)
-const joinPassword = ref('')
+const joinPassword = ref(store.lastCreatedPassword || '')
+const showJoinPassword = ref(false)
+
+watch(
+  () => store.lastCreatedPassword,
+  (pwd) => {
+    if (pwd && !joinPassword.value) {
+      joinPassword.value = pwd
+    }
+  },
+  { immediate: true },
+)
 
 async function onSubmitName(): Promise<void> {
   const name = editingName.value.trim()
@@ -197,8 +208,12 @@ async function onDissolveRoom(): Promise<void> {
             <!-- 招待URL -->
             <section class="panel setup-panel mb-4">
               <div class="section-heading">
-                <h2>参加用URL</h2>
-                <p>このURLを他のプレイヤーに共有して招待します</p>
+                <div class="heading-with-badge">
+                  <h2>参加用URL</h2>
+                  <span v-if="store.hasPassword" class="tag-badge password-badge">🔒 パスワード設定あり</span>
+                  <span v-else class="tag-badge public-badge">🔓 パスワードなし</span>
+                </div>
+                <p>このURLを他のプレイヤーに共有して招待します<span v-if="store.hasPassword">（参加時に合言葉が必要です）</span></p>
               </div>
               <div class="url-row">
                 <input
@@ -268,6 +283,27 @@ async function onDissolveRoom(): Promise<void> {
                 <label for="editMyName" class="field-label">
                   {{ store.myPlayer ? '名前を変更する' : '名前を入力して参加' }}
                 </label>
+                <div v-if="!store.myPlayer && store.hasPassword && !store.isCreator" class="password-field mb-2">
+                  <label for="lobbyJoinPassword" class="field-label password-sublabel">合言葉・パスワード</label>
+                  <div class="password-input-wrap">
+                    <input
+                      id="lobbyJoinPassword"
+                      v-model="joinPassword"
+                      :type="showJoinPassword ? 'text' : 'password'"
+                      class="text-input"
+                      placeholder="パスワードを入力"
+                      @keydown.enter="onSubmitName"
+                    >
+                    <button
+                      type="button"
+                      class="toggle-pwd-btn"
+                      :aria-label="showJoinPassword ? 'パスワードを隠す' : 'パスワードを表示'"
+                      @click="showJoinPassword = !showJoinPassword"
+                    >
+                      {{ showJoinPassword ? '非表示' : '表示' }}
+                    </button>
+                  </div>
+                </div>
                 <div class="name-input-row">
                   <input
                     id="editMyName"
@@ -580,5 +616,68 @@ async function onDissolveRoom(): Promise<void> {
     grid-template-columns: 1fr;
   }
 }
+
+.heading-with-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.password-badge {
+  background: var(--coral-pale, #fff0eb);
+  color: var(--coral, #d9534f);
+  border: 1px solid var(--coral);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.public-badge {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #86efac;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.password-sublabel {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrap .text-input {
+  padding-right: 64px;
+}
+
+.toggle-pwd-btn {
+  position: absolute;
+  right: 8px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.toggle-pwd-btn:hover {
+  background: var(--bg-hover, #f0ebe1);
+  color: var(--fg-main);
+}
+
+.mb-2 { margin-bottom: 8px; }
 </style>
 

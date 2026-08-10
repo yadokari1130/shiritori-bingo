@@ -70,3 +70,33 @@ def clear_session_cookie(response) -> None:
         samesite=samesite,
     )
 
+
+CREATOR_COOKIE_NAME = "shiritori_creator_token"
+
+
+def set_creator_cookie(response, token: str) -> None:
+    """部屋作成者の一時Cookieを設定する。"""
+    secure = is_cookie_secure()
+    samesite = get_cookie_samesite()
+    response.set_cookie(
+        key=CREATOR_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+        path="/",
+    )
+
+
+def clear_creator_cookie(response) -> None:
+    """部屋作成者の一時Cookieを削除する。"""
+    secure = is_cookie_secure()
+    samesite = get_cookie_samesite()
+    response.delete_cookie(
+        key=CREATOR_COOKIE_NAME,
+        path="/",
+        secure=secure,
+        samesite=samesite,
+    )
+
+

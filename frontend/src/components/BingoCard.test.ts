@@ -7,16 +7,17 @@ describe('BingoCard コンポーネント', () => {
   it('小文字（拗音・促音・小あ行）の文字には is-small-char クラスが付与される', () => {
     const card: BingoCardType = {
       size: 3,
+      freeChar: 'か',
       cells: [
-        { char: 'あ', isOpen: false, isFree: false },
-        { char: 'っ', isOpen: false, isFree: false },
-        { char: 'ゃ', isOpen: false, isFree: false },
-        { char: 'い', isOpen: false, isFree: false },
-        { char: 'か', isOpen: true, isFree: true },
-        { char: 'ぁ', isOpen: false, isFree: false },
-        { char: 'つ', isOpen: false, isFree: false },
-        { char: 'や', isOpen: false, isFree: false },
-        { char: 'ー', isOpen: false, isFree: false },
+        { index: 0, row: 0, column: 0, char: 'あ', isOpen: false, isFree: false },
+        { index: 1, row: 0, column: 1, char: 'っ', isOpen: false, isFree: false },
+        { index: 2, row: 0, column: 2, char: 'ゃ', isOpen: false, isFree: false },
+        { index: 3, row: 1, column: 0, char: 'い', isOpen: false, isFree: false },
+        { index: 4, row: 1, column: 1, char: 'か', isOpen: true, isFree: true },
+        { index: 5, row: 1, column: 2, char: 'ぁ', isOpen: false, isFree: false },
+        { index: 6, row: 2, column: 0, char: 'つ', isOpen: false, isFree: false },
+        { index: 7, row: 2, column: 1, char: 'や', isOpen: false, isFree: false },
+        { index: 8, row: 2, column: 2, char: 'ー', isOpen: false, isFree: false },
       ],
     }
 

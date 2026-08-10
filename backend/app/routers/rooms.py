@@ -76,12 +76,22 @@ async def create_room(request: Request, body: CreateRoomRequest):
     password_hash = (
         security.hash_password(body.password) if body.password else None
     )
-    state = await dao.create_room(conn, room_id, password_hash, body.settings)
+    creator_token = security.generate_session_token()
+    creator_token_hash = security.hash_token(creator_token)
+    state = await dao.create_room(
+        conn,
+        room_id,
+        password_hash,
+        body.settings,
+        creator_token_hash=creator_token_hash,
+    )
     url = f"{request.url.scheme}://{request.url.netloc}/game/{room_id}"
-    return JSONResponse(
+    response = JSONResponse(
         status_code=200,
         content={"roomId": room_id, "url": url, "gameState": _public_state(state)},
     )
+    security.set_creator_cookie(response, creator_token)
+    return response
 
 
 @router.get("/api/rooms/{room_id}")
@@ -117,10 +127,18 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
         if session and session["room_id"] != room_id:
             session = None
 
+    # 作成者Cookieの検証（部屋作成者はパスワード入力不要）
+    creator_token = request.cookies.get(security.CREATOR_COOKIE_NAME)
+    is_creator = False
+    if creator_token and row["creator_token_hash"]:
+        if security.hash_token(creator_token) == row["creator_token_hash"]:
+            is_creator = True
+
     # 有効な再接続Cookieがあれば、名前やパスワードの再入力なしで復帰する。
     if session is None:
         password_hash = row["password_hash"]
-        if password_hash and not security.verify_password(body.password or "", password_hash):
+        # 作成者本人でない場合のみパスワードを検証
+        if not is_creator and password_hash and not security.verify_password(body.password or "", password_hash):
             raise HTTPException(status_code=403, detail="パスワードが違います")
         if not body.name:
             raise HTTPException(status_code=400, detail="名前を入力してください")
@@ -189,6 +207,7 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
         },
     )
     security.set_session_cookie(response, new_token)
+    security.clear_creator_cookie(response)
     return response
 
 

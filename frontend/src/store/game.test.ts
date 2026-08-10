@@ -141,6 +141,72 @@ describe('game ストア', () => {
     expect(store.errorMessage).toBe('パスワードが違います')
   })
 
+  it('createRoom: 作成時に指定したパスワードが保持され、同一ルームへのjoinRoomで自動引き継ぎされる', async () => {
+    const store = useGameStore()
+    const vi_api = await import('../api')
+    vi.spyOn(vi_api, 'createRoom').mockResolvedValue({
+      roomId: 'room-pass-123',
+      url: 'http://localhost:5173/game/room-pass-123',
+      gameState: {
+        phase: 'setup',
+        settings: createDefaultSettings(),
+        hasPassword: true,
+        hostPlayerId: null,
+        freeChar: '',
+        players: [],
+        teams: [],
+        playOrder: [],
+        round: 0,
+        roundRoster: [],
+        orderIndex: 0,
+        currentPlayerId: null,
+        currentTeamId: null,
+        requiredStartChar: '',
+        usedWords: [],
+        wordHistory: [],
+        remainingTimeMs: 0,
+        currentTurnTimeLimitMs: 0,
+        currentTurnInputPlayerId: null,
+        turnStartedAt: null,
+        result: null,
+      },
+    })
+    const joinRoomSpy = vi.spyOn(vi_api, 'joinRoom').mockResolvedValue({
+      playerId: 'p1',
+      isHost: true,
+      gameState: {
+        phase: 'setup',
+        settings: createDefaultSettings(),
+        hasPassword: true,
+        hostPlayerId: 'p1',
+        freeChar: '',
+        players: [{ id: 'p1', name: '作成者', teamId: null, status: 'active', connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: null, openedCellCount: null }],
+        teams: [],
+        playOrder: ['p1'],
+        round: 0,
+        roundRoster: ['p1'],
+        orderIndex: 0,
+        currentPlayerId: null,
+        currentTeamId: null,
+        requiredStartChar: '',
+        usedWords: [],
+        wordHistory: [],
+        remainingTimeMs: 0,
+        currentTurnTimeLimitMs: 0,
+        currentTurnInputPlayerId: null,
+        turnStartedAt: null,
+        result: null,
+      },
+    })
+
+    await store.createRoom('secret123')
+    expect(store.lastCreatedPassword).toBe('secret123')
+
+    // パスワード引数なしでjoinRoomを実行しても、作成時のパスワードが使われる
+    await store.joinRoom('room-pass-123', '作成者')
+    expect(joinRoomSpy).toHaveBeenCalledWith('room-pass-123', '作成者', 'secret123')
+  })
+
   it('joinRoom: 404エラー時は「ルームが見つかりません。」をerrorMessageに設定する', async () => {
     const store = useGameStore()
     const vi_api = await import('../api')

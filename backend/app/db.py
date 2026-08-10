@@ -39,43 +39,32 @@ async def _tables_exist(conn: aiosqlite.Connection) -> bool:
         return row is not None
 
 
-async def _schema_is_current(conn: aiosqlite.Connection) -> bool:
-    """roomsテーブルにphaseカラムが存在するか確認する。"""
-    try:
-        async with conn.execute("SELECT phase FROM rooms LIMIT 1") as cursor:
-            await cursor.fetchone()
-        return True
-    except sqlite3.OperationalError:
-        return False
+async def _migrate_schema(conn: aiosqlite.Connection) -> None:
+    """既存テーブルのカラムを確認し、不足しているカラムを ALTER TABLE で追加する。"""
+    # rooms テーブルのカラム確認と追加
+    async with conn.execute("PRAGMA table_info(rooms)") as cursor:
+        columns = {row[1] for row in await cursor.fetchall()}
 
-
-async def _drop_all_tables(conn: aiosqlite.Connection) -> None:
-    """開発用: 既存のすべてのテーブルを削除する。"""
-    await conn.executescript(
-        """
-        DROP TABLE IF EXISTS undo_snapshots;
-        DROP TABLE IF EXISTS word_history;
-        DROP TABLE IF EXISTS player_sessions;
-        DROP TABLE IF EXISTS teams;
-        DROP TABLE IF EXISTS players;
-        DROP TABLE IF EXISTS rooms;
-        """
-    )
+    if "password_hash" not in columns:
+        await conn.execute("ALTER TABLE rooms ADD COLUMN password_hash TEXT")
+    if "creator_token_hash" not in columns:
+        await conn.execute("ALTER TABLE rooms ADD COLUMN creator_token_hash TEXT")
+    if "host_player_id" not in columns:
+        await conn.execute("ALTER TABLE rooms ADD COLUMN host_player_id TEXT")
+    if "round_roster_json" not in columns:
+        await conn.execute("ALTER TABLE rooms ADD COLUMN round_roster_json TEXT NOT NULL DEFAULT '[]'")
 
 
 async def init_db() -> None:
-    """テーブルを作成する。スキーマが古い場合は再作成する。"""
+    """テーブルを作成し、必要に応じてカラムマイグレーションを行う。"""
     conn = await get_db()
     async with _write_lock:
-        if await _tables_exist(conn) and not await _schema_is_current(conn):
-            # 開発中のスキーマ変更に伴い、古いテーブルを再作成する。
-            # 本番環境では適切なマイグレーションを行うこと。
-            await _drop_all_tables(conn)
         await conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS rooms (
                 id TEXT PRIMARY KEY,
                 password_hash TEXT,
+                creator_token_hash TEXT,
                 settings_json TEXT NOT NULL,
                 phase TEXT NOT NULL,
                 free_char TEXT,
@@ -155,4 +144,5 @@ async def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_undo_snapshots_room ON undo_snapshots(room_id);
             """
         )
+        await _migrate_schema(conn)
         await conn.commit()

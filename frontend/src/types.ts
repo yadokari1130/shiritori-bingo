@@ -166,6 +166,7 @@ export type GameSnapshot = Omit<GameState, 'undoHistory'>
 export interface GameState {
   phase: 'setup' | 'playing' | 'result'
   settings: Settings
+  hasPassword?: boolean
   hostPlayerId: string | null
   freeChar: string
   players: Player[]

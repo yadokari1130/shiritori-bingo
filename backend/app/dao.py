@@ -32,25 +32,29 @@ async def create_room(
     room_id: str,
     password_hash: str | None,
     settings,
+    creator_token_hash: str | None = None,
 ) -> GameState:
     """ルームと初期ゲーム状態を作成する。"""
     from app.models import GameState, Team
 
-    state = GameState(phase="setup", settings=settings)
+    state = GameState(
+        phase="setup", settings=settings, hasPassword=bool(password_hash)
+    )
     now = now_ms()
     await conn.execute(
         """
         INSERT INTO rooms (
-            id, password_hash, settings_json, phase, free_char,
+            id, password_hash, creator_token_hash, settings_json, phase, free_char,
             current_player_id, current_team_id, required_start_char,
             round, order_index, remaining_time_ms, current_turn_time_limit_ms,
             turn_started_at, result_json, state_json, created_at, updated_at,
             host_player_id, round_roster_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             room_id,
             password_hash,
+            creator_token_hash,
             settings.model_dump_json(),
             state.phase,
             state.freeChar,
@@ -138,6 +142,7 @@ async def load_room_state(
     if row is None:
         return None
     state = GameState.model_validate(_load(row["state_json"]))
+    state.hasPassword = bool(row["password_hash"])
     # DB側の接続状態を反映する
     db_players = {p["id"]: p for p in await list_players(conn, room_id)}
     for player in state.players:

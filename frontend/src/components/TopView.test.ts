@@ -123,5 +123,100 @@ describe('TopView', () => {
     expect(wrapper.text()).toContain('ルームに参加')
     expect(window.location.pathname).toBe('/')
   })
+
+  it('トップ画面でパスワードを入力してルームを作成できる', async () => {
+    window.history.replaceState(null, '', '/')
+    const createRoomSpy = vi.spyOn(api, 'createRoom').mockResolvedValue({
+      roomId: 'room-new-123',
+      url: 'http://localhost:5173/game/room-new-123',
+      gameState: {
+        phase: 'setup',
+        settings: {
+          mode: 'individual',
+          teamCount: 2,
+          cardSize: 3,
+          cardOptions: { dakuten: true, handakuten: true, yoon: false, sokuon: false, prolonged: false, smallA: false },
+          endCondition: 'turns',
+          targetTurns: 3,
+          targetBingos: 3,
+          timeLimitSeconds: 30,
+          extraTimeSeconds: 10,
+          forceSkipOnTimeout: false,
+          invalidAction: 'skip',
+        },
+        hasPassword: true,
+        hostPlayerId: null,
+        freeChar: '',
+        players: [],
+        teams: [],
+        playOrder: [],
+        round: 0,
+        roundRoster: [],
+        orderIndex: 0,
+        currentPlayerId: null,
+        currentTeamId: null,
+        requiredStartChar: '',
+        usedWords: [],
+        wordHistory: [],
+        remainingTimeMs: 0,
+        currentTurnTimeLimitMs: 0,
+        currentTurnInputPlayerId: null,
+        turnStartedAt: null,
+        result: null,
+      },
+    })
+
+    const wrapper = mount(TopView, {
+      global: {
+        plugins: [createPinia()],
+        config: {
+          compilerOptions: {
+            isCustomElement: (tag: string) => tag.startsWith('v-'),
+          },
+        },
+      },
+    })
+    await nextTick()
+
+    // パスワード入力欄が存在する
+    const pwdInput = wrapper.find('#createRoomPassword')
+    expect(pwdInput.exists()).toBe(true)
+
+    // パスワードを入力
+    await pwdInput.setValue('mypassword')
+
+    // ルームを作成ボタンを押す
+    const submitBtn = wrapper.find('.submit-settings-btn')
+    await submitBtn.trigger('submit')
+
+    expect(createRoomSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      'mypassword',
+    )
+  })
+
+  it('専用URLでパスワードが必要なルーム（hasPassword: true）の場合、パスワード入力欄が表示される', async () => {
+    vi.spyOn(api, 'joinRoom').mockRejectedValue(new api.ApiError('名前を入力してください', 400))
+    vi.spyOn(api, 'fetchRoomInfo').mockResolvedValue({
+      phase: 'setup',
+      hasPassword: true,
+    })
+
+    const wrapper = mount(TopView, {
+      global: {
+        plugins: [createPinia()],
+        config: {
+          compilerOptions: {
+            isCustomElement: (tag: string) => tag.startsWith('v-'),
+          },
+        },
+      },
+    })
+    await nextTick()
+    await vi.waitFor(() => expect(wrapper.find('#dedicatedJoinPassword').exists()).toBe(true))
+
+    expect(wrapper.find('#dedicatedJoinPassword').exists()).toBe(true)
+  })
 })
+
 

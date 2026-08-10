@@ -24,6 +24,10 @@ export const useGameStore = defineStore('game', () => {
 
   // 編集中の設定（トップ画面・ロビーで使用）
   const draftSettings = ref<Settings>(createDefaultSettings())
+  // 作成時に入力したパスワード（作成者本人がロビーで自動参加できるように保持）
+  const lastCreatedPassword = ref<string | null>(null)
+  // 自分が作成した部屋であるフラグ
+  const isCreator = ref(false)
 
   // サーバーから受信したゲーム状態
   const gameState = ref<GameState | null>(null)
@@ -45,6 +49,10 @@ export const useGameStore = defineStore('game', () => {
   const isHost = computed(() => {
     if (!myPlayerId.value || !gameState.value) return false
     return gameState.value.hostPlayerId === myPlayerId.value
+  })
+
+  const hasPassword = computed(() => {
+    return !!gameState.value?.hasPassword
   })
 
   const currentSubjectName = computed(() => {
@@ -202,6 +210,8 @@ export const useGameStore = defineStore('game', () => {
       const res = await api.createRoom(draftSettings.value, password)
       roomId.value = res.roomId
       myPlayerId.value = null
+      lastCreatedPassword.value = password
+      isCreator.value = true
       applyGameState(res.gameState)
       window.history.pushState(null, '', `/game/${res.roomId}`)
     } catch (err) {
@@ -214,7 +224,8 @@ export const useGameStore = defineStore('game', () => {
   async function joinRoom(targetRoomId: string, name: string, password: string | null = null): Promise<void> {
     errorMessage.value = null
     try {
-      const res = await api.joinRoom(targetRoomId, name, password)
+      const effectivePassword = password ?? (targetRoomId === roomId.value ? lastCreatedPassword.value : null)
+      const res = await api.joinRoom(targetRoomId, name, effectivePassword)
       roomId.value = targetRoomId
       myPlayerId.value = res.playerId
       applyGameState(res.gameState)
@@ -458,6 +469,8 @@ export const useGameStore = defineStore('game', () => {
     gameState.value = null
     errorMessage.value = null
     noticeMessage.value = null
+    lastCreatedPassword.value = null
+    isCreator.value = false
     draftSettings.value = createDefaultSettings()
   }
 
@@ -505,11 +518,13 @@ export const useGameStore = defineStore('game', () => {
     roomId,
     myPlayerId,
     isHost,
+    isCreator,
     connectionStatus,
     isRestoringRoom,
     errorMessage,
     noticeMessage,
     draftSettings,
+    lastCreatedPassword,
     gameState,
     serverTimeOffset,
     // getters
@@ -523,6 +538,7 @@ export const useGameStore = defineStore('game', () => {
     canUndo,
     orderedPlayers,
     orderedTeams,
+    hasPassword,
     // actions
     applyGameState,
     createRoom,

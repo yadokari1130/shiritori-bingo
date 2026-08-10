@@ -430,3 +430,77 @@ def test_join_during_playing_or_result():
         assert late_join.status_code == 403
         assert late_join.json()["detail"] == "ゲーム中のため参加できません"
 
+
+def test_room_with_password():
+    settings = Settings(cardSize=3)
+    with TestClient(app) as creator, TestClient(app) as joiner1, TestClient(app) as joiner2:
+        # パスワード付きルームを作成
+        res = creator.post(
+            "/api/rooms",
+            json={"settings": settings.model_dump(), "password": "mypassword123"},
+        )
+        assert res.status_code == 200
+        room_id = res.json()["roomId"]
+
+        # ルーム情報を取得 -> hasPassword が True
+        info_res = creator.get(f"/api/rooms/{room_id}")
+        assert info_res.status_code == 200
+        assert info_res.json()["hasPassword"] is True
+
+        # パスワード未指定で参加 -> 403 パスワードが違います
+        r_nopass = joiner1.post(f"/api/rooms/{room_id}/join", json={"name": "花子"})
+        assert r_nopass.status_code == 403
+        assert r_nopass.json()["detail"] == "パスワードが違います"
+
+        # 誤ったパスワードで参加 -> 403 パスワードが違います
+        r_wrongpass = joiner1.post(
+            f"/api/rooms/{room_id}/join",
+            json={"name": "花子", "password": "wrongpassword"},
+        )
+        assert r_wrongpass.status_code == 403
+        assert r_wrongpass.json()["detail"] == "パスワードが違います"
+
+        # ホスト（部屋作成者）はパスワード未指定（またはnull）でも認証スキップで参加できる
+        r_creator = creator.post(
+            f"/api/rooms/{room_id}/join",
+            json={"name": "太郎"},
+        )
+        assert r_creator.status_code == 200
+        assert r_creator.json()["isHost"] is True
+
+        # 正しいパスワードで参加者が参加
+        r_joiner = joiner2.post(
+            f"/api/rooms/{room_id}/join",
+            json={"name": "次郎", "password": "mypassword123"},
+        )
+        assert r_joiner.status_code == 200
+
+        # 再接続時（Cookie保持）はパスワードなしでも復帰できる
+        r_reconnect = joiner2.post(
+            f"/api/rooms/{room_id}/join",
+            json={"name": ""},
+        )
+        assert r_reconnect.status_code == 200
+
+
+def test_room_without_password():
+    settings = Settings(cardSize=3)
+    with TestClient(app) as creator, TestClient(app) as joiner:
+        # パスワードなしでルーム作成
+        res = creator.post(
+            "/api/rooms",
+            json={"settings": settings.model_dump(), "password": None},
+        )
+        assert res.status_code == 200
+        room_id = res.json()["roomId"]
+
+        # ルーム情報を取得 -> hasPassword が False
+        info_res = creator.get(f"/api/rooms/{room_id}")
+        assert info_res.status_code == 200
+        assert info_res.json()["hasPassword"] is False
+
+        # パスワードなしで正常に参加できる
+        join_res = joiner.post(f"/api/rooms/{room_id}/join", json={"name": "花子"})
+        assert join_res.status_code == 200
+
+

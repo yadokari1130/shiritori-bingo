@@ -17,6 +17,12 @@ const isChecking = ref(false)
 const isJoining = ref(false)
 const isCreating = ref(false)
 
+// ルーム作成時のパスワード
+const createPassword = ref('')
+const showCreatePassword = ref(false)
+const showDedicatedJoinPassword = ref(false)
+const showJoinPassword = ref(false)
+
 // 編集中の設定
 const draft = ref<Settings>({ ...store.draftSettings })
 
@@ -71,7 +77,7 @@ async function onCreateRoom(): Promise<void> {
   isCreating.value = true
   store.clearError()
   try {
-    await store.createRoom()
+    await store.createRoom(createPassword.value.trim() || null)
   } finally {
     isCreating.value = false
   }
@@ -194,14 +200,24 @@ function extractRoomId(input: string): string {
             </div>
             <div v-if="needsPassword" class="field mt-3">
               <label for="dedicatedJoinPassword" class="field-label">合言葉・パスワード</label>
-              <input
-                id="dedicatedJoinPassword"
-                v-model="joinPassword"
-                type="password"
-                class="text-input"
-                placeholder="パスワードを入力"
-                @keydown.enter="onJoinRoom"
-              >
+              <div class="password-input-wrap">
+                <input
+                  id="dedicatedJoinPassword"
+                  v-model="joinPassword"
+                  :type="showDedicatedJoinPassword ? 'text' : 'password'"
+                  class="text-input"
+                  placeholder="パスワードを入力"
+                  @keydown.enter="onJoinRoom"
+                >
+                <button
+                  type="button"
+                  class="toggle-pwd-btn"
+                  :aria-label="showDedicatedJoinPassword ? 'パスワードを隠す' : 'パスワードを表示'"
+                  @click="showDedicatedJoinPassword = !showDedicatedJoinPassword"
+                >
+                  {{ showDedicatedJoinPassword ? '非表示' : '表示' }}
+                </button>
+              </div>
             </div>
           </fieldset>
 
@@ -286,13 +302,25 @@ function extractRoomId(input: string): string {
                 </p>
 
                 <div v-if="needsPassword" class="field mb-3">
-                  <label for="joinPassword" class="field-label">パスワード</label>
-                  <input
-                    id="joinPassword"
-                    v-model="joinPassword"
-                    type="password"
-                    class="text-input"
-                  >
+                  <label for="joinPassword" class="field-label">合言葉・パスワード</label>
+                  <div class="password-input-wrap">
+                    <input
+                      id="joinPassword"
+                      v-model="joinPassword"
+                      :type="showJoinPassword ? 'text' : 'password'"
+                      class="text-input"
+                      placeholder="パスワードを入力"
+                      @keydown.enter="onJoinRoom"
+                    >
+                    <button
+                      type="button"
+                      class="toggle-pwd-btn"
+                      :aria-label="showJoinPassword ? 'パスワードを隠す' : 'パスワードを表示'"
+                      @click="showJoinPassword = !showJoinPassword"
+                    >
+                      {{ showJoinPassword ? '非表示' : '表示' }}
+                    </button>
+                  </div>
                 </div>
 
                 <div class="field mb-3">
@@ -338,7 +366,36 @@ function extractRoomId(input: string): string {
               submit-button-text="ルームを作成"
               :is-submitting="isCreating"
               @submit="onCreateRoom"
-            />
+            >
+              <!-- ルーム作成時の合言葉・パスワード設定（任意） -->
+              <fieldset class="panel-fieldset">
+                <legend class="panel-legend">ルーム作成オプション</legend>
+                <div class="field">
+                  <label for="createRoomPassword" class="field-label">合言葉・パスワード（任意）</label>
+                  <div class="password-input-wrap">
+                    <input
+                      id="createRoomPassword"
+                      v-model="createPassword"
+                      :type="showCreatePassword ? 'text' : 'password'"
+                      class="text-input"
+                      placeholder="パスワードを設定する場合は入力（空欄で設定なし）"
+                      autocomplete="new-password"
+                    >
+                    <button
+                      type="button"
+                      class="toggle-pwd-btn"
+                      :aria-label="showCreatePassword ? 'パスワードを隠す' : 'パスワードを表示'"
+                      @click="showCreatePassword = !showCreatePassword"
+                    >
+                      {{ showCreatePassword ? '非表示' : '表示' }}
+                    </button>
+                  </div>
+                  <p class="field-note mt-1">
+                    合言葉を設定すると、参加時にパスワードの入力が必要になります（空欄でパスワードなし）。
+                  </p>
+                </div>
+              </fieldset>
+            </RuleSettingsForm>
           </section>
         </v-col>
       </v-row>
@@ -368,8 +425,37 @@ function extractRoomId(input: string): string {
   text-align: center;
 }
 
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrap .text-input {
+  padding-right: 64px;
+}
+
+.toggle-pwd-btn {
+  position: absolute;
+  right: 8px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.toggle-pwd-btn:hover {
+  background: var(--bg-hover, #f0ebe1);
+  color: var(--fg-main);
+}
+
 .mb-3 { margin-bottom: 12px; }
 .mb-4 { margin-bottom: 16px; }
+.mt-1 { margin-top: 4px; }
 .mt-3 { margin-top: 12px; }
 .ml-4 { margin-left: 16px; }
 

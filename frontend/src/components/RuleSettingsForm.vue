@@ -491,6 +491,8 @@ function onSelectPresetToEdit(presetId: string): void {
         </div>
       </fieldset>
 
+      <slot />
+
       <!-- 送信アクションボタン -->
       <div class="settings-actions mt-4">
         <button
