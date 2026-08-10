@@ -58,6 +58,7 @@ describe('PlayingView タイマー・時間同期', () => {
     })
 
     const wrapper = mount(PlayingView)
+    expect(wrapper.text()).toContain('文字数: 0文字')
 
     // 初期状態: 40秒
     expect(wrapper.find('.time-value').text()).toBe('40秒')

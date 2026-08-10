@@ -297,6 +297,58 @@ function onSelectPresetToEdit(presetId: string): void {
         </div>
       </fieldset>
 
+      <!-- エクストラ設定 -->
+      <details class="extra-settings">
+        <summary class="panel-fieldset panel-legend">エクストラ設定</summary>
+        <div class="extra-settings-body">
+          <p class="fieldset-note">単語の文字数を制限できます。設定した範囲外の単語は無効入力として扱います。</p>
+          <div class="field-grid mt-2">
+            <div class="field">
+              <label for="topMinWordLength" class="field-label">最小文字数</label>
+              <div class="number-input-row">
+                <input
+                  id="topMinWordLength"
+                  v-model.number="draft.minWordLength"
+                  type="number"
+                  min="1"
+                  class="number-input"
+                  placeholder="制限なし"
+                >
+                <button
+                  type="button"
+                  class="secondary-button btn-sm"
+                  :disabled="draft.minWordLength === null"
+                  @click="draft.minWordLength = null"
+                >
+                  クリア
+                </button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="topMaxWordLength" class="field-label">最大文字数</label>
+              <div class="number-input-row">
+                <input
+                  id="topMaxWordLength"
+                  v-model.number="draft.maxWordLength"
+                  type="number"
+                  min="1"
+                  class="number-input"
+                  placeholder="制限なし"
+                >
+                <button
+                  type="button"
+                  class="secondary-button btn-sm"
+                  :disabled="draft.maxWordLength === null"
+                  @click="draft.maxWordLength = null"
+                >
+                  クリア
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
       <!-- プリセット管理 -->
       <fieldset class="panel-fieldset">
         <legend class="panel-legend">設定プリセット</legend>
@@ -392,6 +444,32 @@ function onSelectPresetToEdit(presetId: string): void {
 .top-rule-settings {
   display: grid;
   gap: 16px;
+}
+
+.extra-settings {
+  display: block;
+}
+
+.extra-settings > summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.extra-settings-body {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-top: none;
+  background: #fffdfa;
+}
+
+.number-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.number-input-row .number-input {
+  flex: 1;
 }
 
 .select-input {

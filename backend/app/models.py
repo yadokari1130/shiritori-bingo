@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class CardOptions(BaseModel):
@@ -30,6 +30,8 @@ class Settings(BaseModel):
     extraTimeSeconds: int = 10
     forceSkipOnTimeout: bool = False
     invalidAction: Literal["skip", "disqualify"] = "skip"
+    minWordLength: int | None = None
+    maxWordLength: int | None = None
 
     @field_validator("cardSize")
     @classmethod
@@ -37,6 +39,23 @@ class Settings(BaseModel):
         if value < 3 or value % 2 == 0:
             raise ValueError("カードサイズは3以上の奇数である必要があります")
         return value
+
+    @field_validator("minWordLength", "maxWordLength")
+    @classmethod
+    def _validate_word_length(cls, value: int | None) -> int | None:
+        if value is not None and value < 1:
+            raise ValueError("単語の文字数制限は1以上で指定してください")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_word_length_range(self) -> Settings:
+        if (
+            self.minWordLength is not None
+            and self.maxWordLength is not None
+            and self.minWordLength > self.maxWordLength
+        ):
+            raise ValueError("最小文字数は最大文字数以下で指定してください")
+        return self
 
 
 class Cell(BaseModel):

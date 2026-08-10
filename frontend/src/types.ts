@@ -27,6 +27,8 @@ export interface Settings {
   extraTimeSeconds: number
   forceSkipOnTimeout: boolean
   invalidAction: 'skip' | 'disqualify'
+  minWordLength: number | null
+  maxWordLength: number | null
 }
 
 /** 初期設定値を返す */
@@ -50,6 +52,8 @@ export function createDefaultSettings(): Settings {
     extraTimeSeconds: 10,
     forceSkipOnTimeout: false,
     invalidAction: 'skip',
+    minWordLength: null,
+    maxWordLength: null,
   }
 }
 

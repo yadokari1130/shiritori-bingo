@@ -168,6 +168,40 @@ def test_process_word_invalid_disqualify():
     assert player.status == "disqualified"
 
 
+@pytest.mark.parametrize(
+    ("invalid_action", "expected_status"),
+    [("skip", "active"), ("disqualify", "disqualified")],
+)
+def test_process_word_outside_length_limit_uses_invalid_action(invalid_action, expected_status):
+    settings = Settings(
+        cardSize=3,
+        minWordLength=3,
+        maxWordLength=4,
+        invalidAction=invalid_action,
+    )
+    state = GameState(phase="setup", settings=settings)
+    state.players = [
+        Player(id="p1", name="p1", status="active"),
+        Player(id="p2", name="p2", status="active"),
+    ]
+    engine.start_game(state, now_ms())
+    first = state.currentPlayerId
+
+    engine.process_word(state, first, state.freeChar + "い", now_ms())
+
+    player = next(p for p in state.players if p.id == first)
+    assert player.status == expected_status
+    assert len(state.wordHistory) == 0
+
+
+def test_word_length_limit_includes_boundaries():
+    settings = Settings(cardSize=3, minWordLength=2, maxWordLength=3)
+    assert engine.is_valid_word_length("あい", settings) is True
+    assert engine.is_valid_word_length("あいう", settings) is True
+    assert engine.is_valid_word_length("あ", settings) is False
+    assert engine.is_valid_word_length("あいうえ", settings) is False
+
+
 def test_disqualify_all_ends_game():
     settings = Settings(cardSize=3, invalidAction="disqualify")
     state = GameState(phase="setup", settings=settings)

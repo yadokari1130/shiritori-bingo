@@ -163,5 +163,7 @@ export function sanitizeSettings(value: unknown): Settings {
     extraTimeSeconds: typeof s.extraTimeSeconds === 'number' && s.extraTimeSeconds >= 0 ? s.extraTimeSeconds : defaults.extraTimeSeconds,
     forceSkipOnTimeout: Boolean(s.forceSkipOnTimeout),
     invalidAction: s.invalidAction === 'disqualify' ? 'disqualify' : 'skip',
+    minWordLength: typeof s.minWordLength === 'number' && s.minWordLength >= 1 ? s.minWordLength : null,
+    maxWordLength: typeof s.maxWordLength === 'number' && s.maxWordLength >= 1 ? s.maxWordLength : null,
   }
 }

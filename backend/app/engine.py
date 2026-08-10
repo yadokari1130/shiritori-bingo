@@ -254,6 +254,14 @@ def is_valid_word_input(word: str) -> bool:
     return all(ch in HIRAGANA_SET for ch in word)
 
 
+def is_valid_word_length(word: str, settings: Settings) -> bool:
+    """設定された単語の文字数制限を満たすか判定する。"""
+    length = len(word)
+    if settings.minWordLength is not None and length < settings.minWordLength:
+        return False
+    return settings.maxWordLength is None or length <= settings.maxWordLength
+
+
 def _current_subject_id(state: GameState) -> str | None:
     if state.settings.mode == "individual":
         return state.currentPlayerId
@@ -685,7 +693,7 @@ def process_word(state: GameState, player_id: str, word: str, now_ms: int) -> Ga
 
     # 無効入力判定
     invalid = False
-    if word in state.usedWords:
+    if not is_valid_word_length(word, state.settings) or word in state.usedWords:
         invalid = True
     elif not state.wordHistory:
         if word[0] != state.freeChar:

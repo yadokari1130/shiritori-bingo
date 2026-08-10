@@ -306,6 +306,9 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
         <p v-else class="help-note mt-2">
           入力はひらがなと伸ばし棒のみ送信できます。
         </p>
+        <p class="word-length-counter mt-2" aria-live="polite">
+          文字数: {{ inputWord.length }}文字
+        </p>
 
         <!-- ホスト用緊急アクション -->
         <div v-if="store.isHost" class="host-actions mt-3">
@@ -411,6 +414,11 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
 .word-form {
   display: grid;
   gap: 8px;
+}
+
+.word-length-counter {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .input-row {

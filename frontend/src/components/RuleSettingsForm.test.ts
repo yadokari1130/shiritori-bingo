@@ -42,7 +42,41 @@ describe('RuleSettingsForm', () => {
     expect(wrapper.text()).toContain('ターンスキップ')
     expect(wrapper.text()).toContain('失格')
     expect(wrapper.text()).toContain('設定プリセット')
+    expect(wrapper.text()).toContain('エクストラ設定')
+    expect(wrapper.find('details.extra-settings').attributes('open')).toBeUndefined()
     expect(wrapper.find('.submit-settings-btn').text()).toBe('ルームを作成')
+  })
+
+  it('文字数制限を設定でき、範囲が逆なら送信を無効化すること', async () => {
+    const wrapper = mount(RuleSettingsForm, {
+      props: { modelValue: createDefaultSettings() },
+    })
+    const details = wrapper.find('details.extra-settings')
+    await details.find('summary').trigger('click')
+    await wrapper.find('#minWordLength').setValue('5')
+    await wrapper.find('#maxWordLength').setValue('3')
+
+    expect(wrapper.text()).toContain('最小文字数は最大文字数以下で指定してください')
+    expect(wrapper.find('.submit-settings-btn').attributes('disabled')).toBeDefined()
+  })
+
+  it('文字数制限をクリアして制限なしへ戻せること', async () => {
+    const settings = createDefaultSettings()
+    settings.minWordLength = 2
+    settings.maxWordLength = 6
+    const wrapper = mount(RuleSettingsForm, {
+      props: { modelValue: settings },
+    })
+
+    await wrapper.find('details.extra-settings summary').trigger('click')
+    const clearButtons = wrapper.findAll('details.extra-settings .number-input-row button')
+    await clearButtons[0].trigger('click')
+    await clearButtons[1].trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({
+      minWordLength: null,
+      maxWordLength: null,
+    })
   })
 
   it('プリセットの保存・一覧表示・読込・初期値復元が動作すること', async () => {
