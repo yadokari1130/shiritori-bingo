@@ -1,5 +1,5 @@
-import '@fontsource/noto-sans-jp/400.css'
-import '@fontsource/noto-sans-jp/700.css'
+import '@fontsource/m-plus-1/400.css'
+import '@fontsource/m-plus-1/700.css'
 import '@mdi/font/css/materialdesignicons.css'
 import 'vuetify/styles'
 import './style.css'
@@ -36,4 +36,3 @@ const vuetify = createVuetify({
 const pinia = createPinia()
 createApp(App).use(pinia).use(vuetify).mount('#app')
 void useGameStore(pinia).restoreRoomFromUrl()
-
