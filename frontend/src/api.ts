@@ -106,11 +106,12 @@ export async function updateSettings(roomId: string, settings: Settings): Promis
 }
 
 /** ゲームを開始する */
-export async function startGame(roomId: string): Promise<ApiGameStateResponse> {
+export async function startGame(roomId: string, settings?: Settings): Promise<ApiGameStateResponse> {
   const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/start`, {
     method: 'POST',
     headers: getHeaders(),
     credentials: 'include',
+    body: settings ? JSON.stringify({ settings }) : undefined,
   })
   return handleResponse<ApiGameStateResponse>(res)
 }

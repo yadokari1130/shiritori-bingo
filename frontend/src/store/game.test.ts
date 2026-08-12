@@ -426,6 +426,51 @@ describe('game ストア', () => {
     expect(store.roomId).toBeNull()
     expect(store.noticeMessage).toBe('部屋を解散しました。')
   })
+
+  it('startGame: 指定された settings があれば api.startGame に渡して開始する', async () => {
+    const store = useGameStore()
+    store.roomId = 'room123'
+
+    const customSettings = {
+      ...createDefaultSettings(),
+      cardSize: 3,
+      minWordLength: 3,
+    }
+
+    const mockGameState = {
+      phase: 'playing' as const,
+      settings: customSettings,
+      hostPlayerId: 'p1',
+      freeChar: 'あ',
+      players: [],
+      teams: [],
+      playOrder: [],
+      round: 1,
+      roundRoster: [],
+      orderIndex: 0,
+      currentPlayerId: 'p1',
+      currentTeamId: null,
+      requiredStartChar: 'あ',
+      usedWords: [],
+      wordHistory: [],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: null,
+      result: null,
+      undoHistory: [],
+    }
+
+    const vi_api = await import('../api')
+    const startSpy = vi.spyOn(vi_api, 'startGame').mockResolvedValue({
+      gameState: mockGameState,
+    })
+
+    await store.startGame(customSettings)
+    expect(startSpy).toHaveBeenCalledWith('room123', customSettings)
+    expect(store.gameState?.settings.cardSize).toBe(3)
+    expect(store.gameState?.settings.minWordLength).toBe(3)
+  })
 })
 
 

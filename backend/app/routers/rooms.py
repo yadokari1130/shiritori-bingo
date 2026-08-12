@@ -18,8 +18,10 @@ from app.models import (
     KickPlayerRequest,
     NameChangeRequest,
     Player,
+    Settings,
     SettingsUpdateRequest,
     SkipAction,
+    StartGameRequest,
     Team,
     UndoAction,
     WordAction,
@@ -400,6 +402,43 @@ async def cleanup_remove_player(
     return before_host != state.hostPlayerId
 
 
+async def _apply_settings(
+    room_id: str, state: GameState, new_settings: Settings
+) -> None:
+    """設定値の検証と適用（チーム再作成含む）。"""
+    try:
+        candidates = engine.get_candidate_chars(new_settings)
+        max_size = engine.max_card_size(candidates)
+        if new_settings.cardSize > max_size:
+            raise ValueError("カードサイズが文字候補数の上限を超えています")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    old_mode = state.settings.mode
+    old_team_count = state.settings.teamCount
+    state.settings = new_settings
+
+    # モードやチーム数が変わった場合はチームを再作成
+    if (
+        state.settings.mode == "team"
+        and (old_mode != "team" or old_team_count != state.settings.teamCount)
+    ):
+        await dao.delete_teams(room_id)
+        state.teams = []
+        for i in range(state.settings.teamCount):
+            team_id = dao.generate_uuid()
+            await dao.create_team(room_id, team_id, i)
+            state.teams.append(Team(id=team_id, sortOrder=i))
+        for player in state.players:
+            player.teamId = None
+    elif state.settings.mode == "individual" and old_mode != "individual":
+        await dao.delete_teams(room_id)
+        state.teams = []
+        for player in state.players:
+            player.teamId = None
+            player.status = "active"
+
+
 @router.put("/api/rooms/{room_id}/settings")
 async def update_settings(room_id: str, request: Request, body: SettingsUpdateRequest):
     player_id = await _require_player(request)
@@ -412,46 +451,16 @@ async def update_settings(room_id: str, request: Request, body: SettingsUpdateRe
         if state.phase != "setup":
             raise HTTPException(status_code=403, detail="設定はロビー中のみ変更できます")
 
-        # 設定値の検証
-        try:
-            candidates = engine.get_candidate_chars(body.settings)
-            max_size = engine.max_card_size(candidates)
-            if body.settings.cardSize > max_size:
-                raise ValueError("カードサイズが文字候補数の上限を超えています")
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-        old_mode = state.settings.mode
-        old_team_count = state.settings.teamCount
-        state.settings = body.settings
-
-        # モードやチーム数が変わった場合はチームを再作成
-        if (
-            state.settings.mode == "team"
-            and (old_mode != "team" or old_team_count != state.settings.teamCount)
-        ):
-            await dao.delete_teams(room_id)
-            state.teams = []
-            for i in range(state.settings.teamCount):
-                team_id = dao.generate_uuid()
-                await dao.create_team(room_id, team_id, i)
-                state.teams.append(Team(id=team_id, sortOrder=i))
-            for player in state.players:
-                player.teamId = None
-        elif state.settings.mode == "individual" and old_mode != "individual":
-            await dao.delete_teams(room_id)
-            state.teams = []
-            for player in state.players:
-                player.teamId = None
-                player.status = "active"
-
+        await _apply_settings(room_id, state, body.settings)
         await dao.save_room_state(room_id, state)
         await broadcast.broadcast(room_id, state)
     return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
 
 
 @router.post("/api/rooms/{room_id}/start")
-async def start_game(room_id: str, request: Request):
+async def start_game(
+    room_id: str, request: Request, body: StartGameRequest | None = None
+):
     player_id = await _require_player(request)
     async with db._write_lock:
         state = await dao.load_room_state(room_id)
@@ -461,6 +470,10 @@ async def start_game(room_id: str, request: Request):
             raise HTTPException(status_code=403, detail="親だけが開始できます")
         if state.phase != "setup":
             raise HTTPException(status_code=403, detail="ロビー中のみ開始できます")
+
+        if body is not None and body.settings is not None:
+            await _apply_settings(room_id, state, body.settings)
+
         if len(state.players) < 2:
             raise HTTPException(
                 status_code=400, detail="参加者が2人以上必要です"

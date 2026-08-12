@@ -116,7 +116,7 @@ async function onUpdateSettings(): Promise<void> {
 }
 
 async function onStartGame(): Promise<void> {
-  await store.startGame()
+  await store.startGame(editSettings.value)
 }
 
 async function onChangeHost(playerId: string, playerName: string): Promise<void> {

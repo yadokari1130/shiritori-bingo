@@ -274,12 +274,12 @@ export const useGameStore = defineStore('game', () => {
   }
 
   /** ゲームを開始する */
-  async function startGame(): Promise<void> {
+  async function startGame(settings?: Settings): Promise<void> {
     const id = roomId.value
     if (!id) return
     errorMessage.value = null
     try {
-      const res = await api.startGame(id)
+      const res = await api.startGame(id, settings)
       applyGameState(res.gameState)
     } catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : 'ゲームを開始できませんでした。'

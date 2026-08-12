@@ -795,6 +795,39 @@ def test_input_word_check_setting_and_invalid_word_action():
         assert after_state["currentPlayerId"] == other_pid
 
 
+def test_start_game_with_updated_settings():
+    """設定反映ボタンを押さずに、ゲーム開始リクエストに新しい設定を渡した場合に設定が反映されてゲームが開始されることのテスト"""
+    init_settings = Settings(cardSize=5, timeLimitSeconds=30, minWordLength=None)
+    with TestClient(app) as host_client, TestClient(app) as joiner_client:
+        res = host_client.post("/api/rooms", json={"settings": init_settings.model_dump()})
+        assert res.status_code == 200
+        room_id = res.json()["roomId"]
+
+        # 参加
+        host_client.post(f"/api/rooms/{room_id}/join", json={"name": "Host"})
+        joiner_client.post(f"/api/rooms/{room_id}/join", json={"name": "Joiner"})
+
+        # 設定反映APIを呼ばず、start APIに直接変更後の設定を渡す
+        new_settings = Settings(cardSize=3, timeLimitSeconds=15, minWordLength=3, maxWordLength=5)
+        start_res = host_client.post(
+            f"/api/rooms/{room_id}/start",
+            json={"settings": new_settings.model_dump()},
+        )
+        assert start_res.status_code == 200
+        state = start_res.json()["gameState"]
+        assert state["phase"] == "playing"
+        assert state["settings"]["cardSize"] == 3
+        assert state["settings"]["timeLimitSeconds"] == 15
+        assert state["settings"]["minWordLength"] == 3
+        assert state["settings"]["maxWordLength"] == 5
+
+        # プレイヤーのカードサイズも 3x3 になっていること
+        for p in state["players"]:
+            assert p["card"]["size"] == 3
+            assert len(p["card"]["cells"]) == 9
+
+
+
 
 
 

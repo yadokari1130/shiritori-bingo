@@ -221,6 +221,12 @@ class SettingsUpdateRequest(BaseModel):
     settings: Settings
 
 
+class StartGameRequest(BaseModel):
+    """ゲーム開始リクエスト。"""
+
+    settings: Settings | None = None
+
+
 class JoinRoomRequest(BaseModel):
     """ルーム参加リクエスト。"""
 
@@ -238,7 +244,6 @@ class ChangeTeamRequest(BaseModel):
     """チーム変更リクエスト。"""
 
     teamId: str | None = None
-
 
 
 class ChangeHostRequest(BaseModel):
