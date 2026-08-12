@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app import db
+from app import dao, db
 from app.main import app
 from app.models import CardOptions, Settings
 
@@ -87,12 +87,13 @@ def test_invalid_word_skips_turn():
 
         client = creator if current == pid1 else joiner
         action = client.post(
-            f"/api/rooms/{room_id}/action", json={"type": "word", "word": "ずるい"}
+            f"/api/rooms/{room_id}/action", json={"type": "word", "word": "きりん"}
         )
         assert action.status_code == 200
         data = action.json()["gameState"]
         assert len(data["wordHistory"]) == 0
         assert data["currentPlayerId"] != current
+
 
 
 def test_host_only_start():
@@ -528,5 +529,224 @@ def test_creator_late_join_takes_host():
         creator_pid = r2.json()["playerId"]
         assert r2.json()["isHost"] is True
         assert r2.json()["gameState"]["hostPlayerId"] == creator_pid
+
+
+def test_lobby_disconnect_removes_player_and_allows_reconnect_without_name():
+    settings = Settings(cardSize=3)
+    with TestClient(app) as host_client, TestClient(app) as joiner_client:
+        res = host_client.post(
+            "/api/rooms", json={"settings": settings.model_dump()}
+        )
+        room_id = res.json()["roomId"]
+
+        # ホストと参加者が参加
+        r1 = host_client.post(f"/api/rooms/{room_id}/join", json={"name": "ホスト"})
+        assert r1.status_code == 200
+        r2 = joiner_client.post(f"/api/rooms/{room_id}/join", json={"name": "参加者1"})
+        assert r2.status_code == 200
+        joiner_pid = r2.json()["playerId"]
+
+        # 参加者がSSEに接続し、切断する（タブを閉じる動作をシミュレート）
+        with joiner_client.stream("GET", f"/api/rooms/{room_id}/events") as sse_stream:
+            # 接続中の状態を確認
+            pass
+
+        # SSEストリームを抜けたので切断された状態
+        # ホスト視点でゲーム状態を確認
+        state = asyncio.run(dao.load_room_state(room_id))
+        assert state is not None
+        # ロビー（setup）のため、切断された参加者はプレイヤー一覧から即座に削除されている
+        player_ids = [p.id for p in state.players]
+        assert joiner_pid not in player_ids
+        assert len(state.players) == 1
+
+        # ホストがゲームを開始しようとしても参加者不足（1人）で開始できない
+        start_res = host_client.post(f"/api/rooms/{room_id}/start")
+        assert start_res.status_code == 400
+        assert "参加者が2人以上必要です" in start_res.json()["detail"]
+
+        # 切断された参加者がCookieを持って再接続（名前入力不要）
+        reconnect_res = joiner_client.post(
+            f"/api/rooms/{room_id}/join", json={"name": ""}
+        )
+        assert reconnect_res.status_code == 200
+        reconnect_data = reconnect_res.json()
+        assert reconnect_data["playerId"] == joiner_pid
+        # 名前「参加者1」が復元されてプレイヤー一覧に再度追加されている
+        reconnected_players = reconnect_data["gameState"]["players"]
+        assert len(reconnected_players) == 2
+        joined_p = next(p for p in reconnected_players if p["id"] == joiner_pid)
+        assert joined_p["name"] == "参加者1"
+        assert joined_p["connectionStatus"] == "connected"
+
+        # 再度ゲーム開始 -> 2人で正常にゲームが開始される
+        start_res2 = host_client.post(f"/api/rooms/{room_id}/start")
+        assert start_res2.status_code == 200
+        gs = start_res2.json()["gameState"]
+        assert gs["phase"] == "playing"
+        assert len(gs["players"]) == 2
+
+
+def test_playing_disconnect_and_reconnect():
+    """対戦中にSSE切断された場合、connectionStatusがdisconnectedになり、再接続で復帰する。"""
+    with TestClient(app) as host_client, TestClient(app) as joiner_client:
+        settings = Settings(cardSize=3, mode="individual")
+        res = host_client.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+
+        # ホストと参加者が参加
+        r1 = host_client.post(f"/api/rooms/{room_id}/join", json={"name": "ホスト"})
+        assert r1.status_code == 200
+        r2 = joiner_client.post(f"/api/rooms/{room_id}/join", json={"name": "参加者1"})
+        assert r2.status_code == 200
+        joiner_pid = r2.json()["playerId"]
+
+        # ゲーム開始
+        start_res = host_client.post(f"/api/rooms/{room_id}/start")
+        assert start_res.status_code == 200
+        assert start_res.json()["gameState"]["phase"] == "playing"
+
+        # 参加者がSSEに接続し、切断する
+        with joiner_client.stream("GET", f"/api/rooms/{room_id}/events") as _:
+            pass
+
+        # 切断後：対戦中のためプレイヤーは削除されず、connectionStatusがdisconnectedになる
+        state = asyncio.run(dao.load_room_state(room_id))
+        assert state is not None
+        assert len(state.players) == 2
+        p2 = next(p for p in state.players if p.id == joiner_pid)
+        assert p2.connectionStatus == "disconnected"
+        assert p2.disconnectedAt is not None
+
+        # 参加者が再接続（join API）
+        reconnect_res = joiner_client.post(
+            f"/api/rooms/{room_id}/join", json={"name": ""}
+        )
+        assert reconnect_res.status_code == 200
+        state2 = asyncio.run(dao.load_room_state(room_id))
+        assert state2 is not None
+        p2_reconnected = next(p for p in state2.players if p.id == joiner_pid)
+        assert p2_reconnected.connectionStatus == "connected"
+        assert p2_reconnected.disconnectedAt is None
+
+
+def test_notify_disconnect_endpoint():
+    """POST /api/rooms/{room_id}/disconnect による即時切断通知の検証。"""
+    with TestClient(app) as host_client, TestClient(app) as joiner_client:
+        settings = Settings(cardSize=3, mode="individual")
+        res = host_client.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+
+        # ロビー参加
+        host_client.post(f"/api/rooms/{room_id}/join", json={"name": "ホスト"})
+        r2 = joiner_client.post(f"/api/rooms/{room_id}/join", json={"name": "参加者1"})
+        joiner_pid = r2.json()["playerId"]
+
+        # ロビー時に切断通知を送信 -> プレイヤーがロビーから即時除外される
+        dc_res = joiner_client.post(f"/api/rooms/{room_id}/disconnect")
+        assert dc_res.status_code == 200
+        state = asyncio.run(dao.load_room_state(room_id))
+        assert state is not None
+        assert joiner_pid not in [p.id for p in state.players]
+
+        # 再接続してゲーム開始
+        joiner_client.post(f"/api/rooms/{room_id}/join", json={"name": ""})
+        start_res = host_client.post(f"/api/rooms/{room_id}/start")
+        assert start_res.status_code == 200
+
+        # 対戦中に切断通知を送信 -> connectionStatusがdisconnectedになる
+        dc_res2 = joiner_client.post(f"/api/rooms/{room_id}/disconnect")
+        assert dc_res2.status_code == 200
+        state2 = asyncio.run(dao.load_room_state(room_id))
+        assert state2 is not None
+        p2 = next(p for p in state2.players if p.id == joiner_pid)
+        assert p2.connectionStatus == "disconnected"
+
+
+def test_result_disconnect_and_return_to_lobby_removes_disconnected_player():
+    """リザルト画面で切断したプレイヤーが、ロビーに戻った際にプレイヤー一覧から削除されることを検証する。"""
+    with TestClient(app) as host_client, TestClient(app) as joiner_client:
+        settings = Settings(cardSize=3, mode="individual", targetTurns=1, endCondition="turns")
+        res = host_client.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+
+        # ホストと参加者が参加
+        r1 = host_client.post(f"/api/rooms/{room_id}/join", json={"name": "ホスト"})
+        assert r1.status_code == 200
+        host_pid = r1.json()["playerId"]
+        r2 = joiner_client.post(f"/api/rooms/{room_id}/join", json={"name": "参加者1"})
+        assert r2.status_code == 200
+        joiner_pid = r2.json()["playerId"]
+
+        # ゲーム開始
+        start_res = host_client.post(f"/api/rooms/{room_id}/start")
+        assert start_res.status_code == 200
+
+        # 1ターンで終了させるため、2手番スキップまたは単語入力を行う
+        state = asyncio.run(dao.load_room_state(room_id))
+        assert state is not None
+        # 1人目スキップ
+        s1 = host_client.post(
+            f"/api/rooms/{room_id}/action",
+            json={"type": "skip", "subjectId": state.currentPlayerId},
+        )
+        assert s1.status_code == 200
+        state = asyncio.run(dao.load_room_state(room_id))
+        # 2人目スキップ
+        s2 = host_client.post(
+            f"/api/rooms/{room_id}/action",
+            json={"type": "skip", "subjectId": state.currentPlayerId},
+        )
+        assert s2.status_code == 200
+
+        # リザルト画面に遷移していることを確認
+        state = asyncio.run(dao.load_room_state(room_id))
+        assert state is not None
+        assert state.phase == "result"
+        assert len(state.players) == 2
+
+        # 参加者がリザルト画面で切断通知を送信
+        dc_res = joiner_client.post(f"/api/rooms/{room_id}/disconnect")
+        assert dc_res.status_code == 200
+
+        # リザルト画面ではプレイヤー一覧に切断状態で残っている（結果表示のため）
+        state_in_result = asyncio.run(dao.load_room_state(room_id))
+        assert state_in_result is not None
+        assert state_in_result.phase == "result"
+        assert len(state_in_result.players) == 2
+        p2_in_result = next(p for p in state_in_result.players if p.id == joiner_pid)
+        assert p2_in_result.connectionStatus == "disconnected"
+
+        # ホストが「ゲーム終了（ロビーへ戻る）」を実行
+        lobby_res = host_client.post(f"/api/rooms/{room_id}/lobby")
+        assert lobby_res.status_code == 200
+        lobby_gs = lobby_res.json()["gameState"]
+        assert lobby_gs["phase"] == "setup"
+
+        # ロビーに戻った時点で、切断していたプレイヤーが除外されていること
+        assert len(lobby_gs["players"]) == 1
+        assert lobby_gs["players"][0]["id"] == host_pid
+
+        # DB上の状態も確認
+        state_in_lobby = asyncio.run(dao.load_room_state(room_id))
+        assert state_in_lobby is not None
+        assert state_in_lobby.phase == "setup"
+        assert len(state_in_lobby.players) == 1
+        assert state_in_lobby.players[0].id == host_pid
+
+        # 参加者1人なのでゲーム開始できない
+        start_res2 = host_client.post(f"/api/rooms/{room_id}/start")
+        assert start_res2.status_code == 400
+        assert "参加者が2人以上必要です" in start_res2.json()["detail"]
+
+        # 切断していた参加者が再接続
+        reconnect_res = joiner_client.post(f"/api/rooms/{room_id}/join", json={"name": ""})
+        assert reconnect_res.status_code == 200
+        reconnect_gs = reconnect_res.json()["gameState"]
+        assert len(reconnect_gs["players"]) == 2
+
+
+
+
 
 

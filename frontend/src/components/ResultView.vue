@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useGameStore } from '../store/game'
 import BingoCard from './BingoCard.vue'
+import DisconnectedMark from './DisconnectedMark.vue'
 import { buildCharOpenStateColumns, collectOpenedChars } from '../utils/bingo'
 import { isSmallKana } from '../utils/shiritori'
 
@@ -36,19 +37,23 @@ const orderedResults = computed(() => {
   if (snapshot.value.settings.mode === 'individual') {
     return snapshot.value.players.map((p) => ({
       id: p.playerId,
-      title: p.name,
-      subtitle: p.teamId ? 'チーム所属' : undefined,
+       title: p.name,
+       subtitle: p.teamId ? 'チーム所属' : undefined,
+       members: [],
+       disconnected: p.connectionStatus === 'disconnected',
       card: p.card,
       disqualified: p.status === 'disqualified',
     }))
   }
   return snapshot.value.teams.map((t, idx) => ({
-    id: t.teamId,
-    title: `チーム ${idx + 1}`,
-    subtitle: t.memberPlayerIds
-      .map((id) => snapshot.value!.players.find((p) => p.playerId === id)?.name)
-      .filter((name): name is string => Boolean(name))
-      .join('、'),
+     id: t.teamId,
+     title: `チーム ${idx + 1}`,
+     subtitle: undefined,
+     disconnected: false,
+     members: t.memberPlayerIds
+       .map((id) => snapshot.value!.players.find((p) => p.playerId === id))
+       .filter((player): player is NonNullable<typeof player> => Boolean(player))
+       .map((player) => ({ name: player.name, disconnected: player.connectionStatus === 'disconnected' })),
     card: t.card,
     disqualified: t.status === 'disqualified',
   }))
@@ -143,7 +148,10 @@ async function onReturnToLobby(): Promise<void> {
                     (snapshot?.teams.find((t) => t.teamId === ranking.subjectId)
                       ? `チーム ${(snapshot?.teams.findIndex((t) => t.teamId === ranking.subjectId) ?? 0) + 1}`
                       : '')
-                  }}
+                   }}
+                   <DisconnectedMark
+                     v-if="ranking.subjectType === 'player' && snapshot?.players.find((p) => p.playerId === ranking.subjectId)?.connectionStatus === 'disconnected'"
+                   />
                 </strong>
               </td>
               <td>{{ ranking.bingoCount }}本</td>
@@ -182,7 +190,9 @@ async function onReturnToLobby(): Promise<void> {
           :key="item.id"
           :card="item.card!"
           :title="item.title"
-          :subtitle="item.subtitle"
+           :subtitle="item.subtitle"
+           :disconnected="item.disconnected"
+           :members="item.members"
           :disqualified="item.disqualified"
         />
       </div>

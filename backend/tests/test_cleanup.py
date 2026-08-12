@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from app import cleanup, dao, db
-from app.models import Settings
+from app.models import Player, Settings
 from app.orm_models import Room
 
 
@@ -38,3 +38,23 @@ async def test_empty_room_cleanup():
 
     # room_old_empty は削除されていること
     assert await dao.get_room("room_old_empty") is None
+
+
+@pytest.mark.anyio
+async def test_stale_sse_session_is_disconnected():
+    settings = Settings(cardSize=3)
+    await dao.create_room("room_stale", None, settings)
+    state = await dao.load_room_state("room_stale")
+    assert state is not None
+    player = Player(id="player_stale", name="ccc", connectionStatus="connected")
+    state.players.append(player)
+    await dao.save_room_state("room_stale", state)
+    await dao.create_session("session_stale", "room_stale", player.id, "token-stale")
+    await dao.update_session_connections("session_stale", 1)
+
+    stale_before = dao.now_ms() + 1
+    expired = await dao.expire_stale_sessions(stale_before)
+
+    assert expired == [("room_stale", player.id)]
+    players = await dao.list_players("room_stale")
+    assert players[0]["connection_status"] == "disconnected"

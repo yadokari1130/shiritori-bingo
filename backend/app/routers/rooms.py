@@ -144,15 +144,51 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
         player_id = session["player_id"]
         player = next((p for p in state.players if p.id == player_id), None)
         if player is None:
-            raise HTTPException(status_code=403, detail="参加者が見つかりません")
-        if state.phase == "result" and player_id not in {p.id for p in state.players}:
-            raise HTTPException(status_code=403, detail="参加できませんでした。ゲーム開始前のみ参加できます")
-        player.connectionStatus = "connected"
-        player.disconnectedAt = None
+            if state.phase != "setup":
+                raise HTTPException(
+                    status_code=403,
+                    detail="ゲーム中のため参加できません" if state.phase == "playing" else "ゲームが終了しているため参加できません",
+                )
+            db_p = await dao.get_player(player_id)
+            if db_p is None:
+                raise HTTPException(status_code=403, detail="参加者が見つかりません")
+            status = "active" if state.settings.mode == "individual" else None
+            valid_team_id = (
+                db_p["team_id"]
+                if db_p["team_id"] in {t.id for t in state.teams}
+                else None
+            )
+            player = Player(
+                id=player_id,
+                name=db_p["name"],
+                status=status,  # type: ignore[arg-type]
+                connectionStatus="connected",
+                sortOrder=db_p["sort_order"],
+                teamId=valid_team_id,
+            )
+            state.players.append(player)
+            for team in state.teams:
+                team.memberPlayerIds = [
+                    p.id for p in state.players if p.teamId == team.id
+                ]
+        else:
+            if state.phase == "result" and player_id not in {p.id for p in state.players}:
+                raise HTTPException(status_code=403, detail="参加できませんでした。ゲーム開始前のみ参加できます")
+            player.connectionStatus = "connected"
+            player.disconnectedAt = None
+
         await dao.set_player_connection_status(player_id, True)
+        host_changed = False
+        if state.hostPlayerId is None:
+            state.hostPlayerId = player_id
+            host_changed = True
         is_host = state.hostPlayerId == player_id
         await dao.save_room_state(room_id, state)
-        await broadcast.broadcast(room_id, state)
+        await broadcast.broadcast(
+            room_id,
+            state,
+            notice="親が変更されました。" if host_changed else None,
+        )
         response = JSONResponse(
             status_code=200,
             content={
@@ -259,6 +295,62 @@ async def leave_room(room_id: str, request: Request):
         return response
 
 
+@router.post("/api/rooms/{room_id}/disconnect")
+async def disconnect_room(room_id: str, request: Request):
+    """タブ閉じ・画面離脱時の即時切断通知。"""
+    token = request.cookies.get(security.SESSION_COOKIE_NAME)
+    if not token:
+        return JSONResponse(status_code=200, content={"success": True})
+    session = await dao.get_session_by_token_hash(security.hash_token(token))
+    if session is None or session["room_id"] != room_id:
+        return JSONResponse(status_code=200, content={"success": True})
+
+    player_id = session["player_id"]
+    async with db._write_lock:
+        state = await dao.load_room_state(room_id)
+        if state is None:
+            return JSONResponse(status_code=200, content={"success": True})
+
+        await dao.update_session_connections(session["id"], -100)
+        await dao.set_player_connection_status(player_id, False)
+
+        host_changed = False
+        if state.phase == "setup":
+            state.players = [p for p in state.players if p.id != player_id]
+            for team in state.teams:
+                team.memberPlayerIds = [
+                    p.id for p in state.players if p.teamId == team.id
+                ]
+            if state.hostPlayerId == player_id:
+                connected = [
+                    p for p in state.players if p.connectionStatus == "connected"
+                ]
+                connected.sort(key=lambda p: p.sortOrder)
+                state.hostPlayerId = connected[0].id if connected else None
+                host_changed = True
+        else:
+            player = next((p for p in state.players if p.id == player_id), None)
+            if player is not None:
+                player.connectionStatus = "disconnected"
+                player.disconnectedAt = dao.now_ms()
+            if state.hostPlayerId == player_id:
+                connected = [
+                    p for p in state.players if p.connectionStatus == "connected"
+                ]
+                connected.sort(key=lambda p: p.sortOrder)
+                state.hostPlayerId = connected[0].id if connected else None
+                host_changed = True
+
+        await dao.save_room_state(room_id, state)
+        await broadcast.broadcast(
+            room_id,
+            state,
+            notice="親が変更されました。" if host_changed else None,
+        )
+
+    return JSONResponse(status_code=200, content={"success": True})
+
+
 @router.delete("/api/rooms/{room_id}")
 async def delete_room(room_id: str, request: Request):
     player_id = await _require_player(request)
@@ -283,7 +375,6 @@ async def delete_room(room_id: str, request: Request):
         response = JSONResponse(status_code=200, content={"success": True})
         security.clear_session_cookie(response)
         return response
-
 
 
 async def cleanup_remove_player(
@@ -426,6 +517,11 @@ async def return_to_lobby(room_id: str, request: Request):
         state.result = None
         state.undoHistory = []
 
+        # 切断中のプレイヤーをロビーから除外する
+        state.players = [
+            p for p in state.players if p.connectionStatus == "connected"
+        ]
+
         for player in state.players:
             player.card = None
             player.bingoLineIds = [] if state.settings.mode == "individual" else None
@@ -440,10 +536,21 @@ async def return_to_lobby(room_id: str, request: Request):
                 p.id for p in state.players if p.teamId == team.id
             ]
 
+        host_changed = False
+        if state.hostPlayerId not in {p.id for p in state.players}:
+            connected = [p for p in state.players if p.connectionStatus == "connected"]
+            connected.sort(key=lambda p: p.sortOrder)
+            state.hostPlayerId = connected[0].id if connected else None
+            host_changed = True
+
         await dao.delete_undo_snapshots_for_room(room_id)
         await dao.delete_word_history_for_room(room_id)
         await dao.save_room_state(room_id, state)
-        await broadcast.broadcast(room_id, state)
+        await broadcast.broadcast(
+            room_id,
+            state,
+            notice="親が変更されました。" if host_changed else None,
+        )
     return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
 
 
@@ -642,6 +749,17 @@ async def action(room_id: str, request: Request, body: ActionRequest):
     )
 
 
+async def _wait_for_disconnect(request: Request) -> None:
+    """クライアントの切断（http.disconnect）を待機する。"""
+    while True:
+        try:
+            message = await request._receive()
+            if message.get("type") == "http.disconnect":
+                return
+        except Exception:
+            return
+
+
 @router.get("/api/rooms/{room_id}/events")
 async def events(room_id: str, request: Request):
     token = request.cookies.get(security.SESSION_COOKIE_NAME)
@@ -655,6 +773,7 @@ async def events(room_id: str, request: Request):
 
     async def event_generator():
         queue = broadcast.subscribe(room_id)
+        disconnect_task = asyncio.create_task(_wait_for_disconnect(request))
         try:
             async with db._write_lock:
                 state = await dao.load_room_state(room_id)
@@ -674,6 +793,29 @@ async def events(room_id: str, request: Request):
                     player.connectionStatus = "connected"
                     player.disconnectedAt = None
                     await dao.set_player_connection_status(player_id, True)
+                elif state.phase == "setup":
+                    db_p = await dao.get_player(player_id)
+                    if db_p is not None:
+                        status = "active" if state.settings.mode == "individual" else None
+                        valid_team_id = (
+                            db_p["team_id"]
+                            if db_p["team_id"] in {t.id for t in state.teams}
+                            else None
+                        )
+                        player = Player(
+                            id=player_id,
+                            name=db_p["name"],
+                            status=status,  # type: ignore[arg-type]
+                            connectionStatus="connected",
+                            sortOrder=db_p["sort_order"],
+                            teamId=valid_team_id,
+                        )
+                        state.players.append(player)
+                        for team in state.teams:
+                            team.memberPlayerIds = [
+                                p.id for p in state.players if p.teamId == team.id
+                            ]
+                        await dao.set_player_connection_status(player_id, True)
                 await dao.update_session_connections(session["id"], 1)
                 state.remainingTimeMs = engine.get_remaining_time_ms(
                     state, dao.now_ms()
@@ -688,13 +830,23 @@ async def events(room_id: str, request: Request):
                     notice="親が変更されました。" if host_changed else None,
                 )
 
-            while True:
-                if await request.is_disconnected():
+            while not disconnect_task.done():
+                get_task = asyncio.create_task(queue.get())
+                done, pending = await asyncio.wait(
+                    [get_task, disconnect_task],
+                    timeout=3.0,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if disconnect_task in done:
+                    get_task.cancel()
                     break
-                try:
-                    payload = await asyncio.wait_for(queue.get(), timeout=30.0)
+                if get_task in done:
+                    payload = get_task.result()
+                    await dao.touch_session(session["id"])
                     yield broadcast.format_sse(payload)
-                except TimeoutError:
+                else:
+                    get_task.cancel()
+                    await dao.touch_session(session["id"])
                     yield broadcast.format_sse(
                         {
                             "event": "ping",
@@ -702,6 +854,7 @@ async def events(room_id: str, request: Request):
                         }
                     )
         finally:
+            disconnect_task.cancel()
             broadcast.unsubscribe(room_id, queue)
             async with db._write_lock:
                 new_count = await dao.update_session_connections(session["id"], -1)
@@ -709,24 +862,46 @@ async def events(room_id: str, request: Request):
                     await dao.set_player_connection_status(player_id, False)
                     state = await dao.load_room_state(room_id)
                     if state is not None:
-                        player = next(
-                            (p for p in state.players if p.id == player_id), None
-                        )
-                        if player is not None:
-                            player.connectionStatus = "disconnected"
-                            player.disconnectedAt = dao.now_ms()
                         host_changed = False
-                        if state.hostPlayerId == player_id:
-                            connected = [
-                                p
-                                for p in state.players
-                                if p.connectionStatus == "connected"
+                        if state.phase == "setup":
+                            state.players = [
+                                p for p in state.players if p.id != player_id
                             ]
-                            connected.sort(key=lambda p: p.sortOrder)
-                            state.hostPlayerId = (
-                                connected[0].id if connected else None
+                            for team in state.teams:
+                                team.memberPlayerIds = [
+                                    p.id
+                                    for p in state.players
+                                    if p.teamId == team.id
+                                ]
+                            if state.hostPlayerId == player_id:
+                                connected = [
+                                    p
+                                    for p in state.players
+                                    if p.connectionStatus == "connected"
+                                ]
+                                connected.sort(key=lambda p: p.sortOrder)
+                                state.hostPlayerId = (
+                                    connected[0].id if connected else None
+                                )
+                                host_changed = True
+                        else:
+                            player = next(
+                                (p for p in state.players if p.id == player_id), None
                             )
-                            host_changed = True
+                            if player is not None:
+                                player.connectionStatus = "disconnected"
+                                player.disconnectedAt = dao.now_ms()
+                            if state.hostPlayerId == player_id:
+                                connected = [
+                                    p
+                                    for p in state.players
+                                    if p.connectionStatus == "connected"
+                                ]
+                                connected.sort(key=lambda p: p.sortOrder)
+                                state.hostPlayerId = (
+                                    connected[0].id if connected else None
+                                )
+                                host_changed = True
                         await dao.save_room_state(room_id, state)
                         await broadcast.broadcast(
                             room_id,

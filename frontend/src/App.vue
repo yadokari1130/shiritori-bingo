@@ -1,11 +1,30 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
 import { useGameStore } from './store/game'
+import * as api from './api'
 import TopView from './components/TopView.vue'
 import LobbyView from './components/LobbyView.vue'
 import PlayingView from './components/PlayingView.vue'
 import ResultView from './components/ResultView.vue'
 
 const store = useGameStore()
+
+function handleUnload() {
+  if (store.roomId) {
+    api.notifyDisconnect(store.roomId)
+  }
+  store.disconnectSse()
+}
+
+onMounted(() => {
+  window.addEventListener('pagehide', handleUnload)
+  window.addEventListener('beforeunload', handleUnload)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pagehide', handleUnload)
+  window.removeEventListener('beforeunload', handleUnload)
+})
 </script>
 
 <template>

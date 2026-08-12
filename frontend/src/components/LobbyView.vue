@@ -4,6 +4,7 @@ import { useGameStore } from '../store/game'
 import { buildCardCharPool, maxCardSize } from '../utils/shiritori'
 import type { Settings } from '../types'
 import RuleSettingsForm from './RuleSettingsForm.vue'
+import DisconnectedMark from './DisconnectedMark.vue'
 
 const store = useGameStore()
 
@@ -247,16 +248,13 @@ async function onDissolveRoom(): Promise<void> {
                   :class="{ 'is-me': player.id === store.myPlayerId }"
                 >
                   <div class="player-info">
-                    <strong>{{ player.name }}</strong>
+                     <strong>{{ player.name }}<DisconnectedMark v-if="player.connectionStatus === 'disconnected'" /></strong>
                     <span v-if="player.id === store.myPlayerId" class="tag-badge current-badge">あなた</span>
                   </div>
                   <div class="player-right">
                     <div class="player-badges">
                       <span v-if="player.id === store.gameState?.hostPlayerId" class="status-badge">
                         親（ホスト）
-                      </span>
-                      <span v-if="player.connectionStatus === 'disconnected'" class="status-badge disqualified">
-                        切断中
                       </span>
                     </div>
                     <div v-if="store.isHost && player.id !== store.myPlayerId" class="player-actions">

@@ -81,6 +81,11 @@ async def delete_room(room_id):
     await Room.filter(id=room_id).delete()
 
 
+async def get_player(player_id):
+    player = await Player.get_or_none(id=player_id)
+    return _player_row(player) if player else None
+
+
 async def list_players(room_id):
     return [_player_row(p) for p in await Player.filter(room_id=room_id).order_by("sort_order")]
 
@@ -140,9 +145,10 @@ async def save_room_state(room_id, state):
                 "disconnected_at": player.disconnectedAt,
             },
         )
-    for player in await Player.filter(room_id=room_id).exclude(id__in=state_ids):
-        await PlayerSession.filter(player_id=player.id).delete()
-        await player.delete()
+    if state.phase != "setup":
+        for player in await Player.filter(room_id=room_id).exclude(id__in=state_ids):
+            await PlayerSession.filter(player_id=player.id).delete()
+            await player.delete()
 
     state_team_ids = {t.id for t in state.teams}
     for team in state.teams:
@@ -161,6 +167,13 @@ async def save_room_state(room_id, state):
 async def create_session(session_id, room_id, player_id, token_hash):
     await PlayerSession.create(id=session_id, room_id=room_id, player_id=player_id,
                                token_hash=token_hash, last_seen_at=now_ms())
+
+
+async def reset_connection_statuses() -> None:
+    """サーバー再起動時に、前回プロセスの接続数を破棄する。"""
+    now = now_ms()
+    await PlayerSession.all().update(active_connections=0, disconnected_at=now, last_seen_at=now)
+    await Player.all().update(connection_status="disconnected", disconnected_at=now)
 
 
 def _session_row(session: PlayerSession) -> dict:
@@ -183,6 +196,33 @@ async def update_session_connections(session_id, delta):
     session.disconnected_at = now_ms() if session.active_connections == 0 else None
     await session.save()
     return session.active_connections
+
+
+async def touch_session(session_id):
+    """SSE接続が生存していることを記録する。"""
+    await PlayerSession.filter(id=session_id).update(last_seen_at=now_ms())
+
+
+async def expire_stale_sessions(before_ms):
+    """ハートビートが途絶えたSSE接続を切断済みにする。"""
+    sessions = await PlayerSession.filter(
+        active_connections__gt=0, last_seen_at__lt=before_ms
+    )
+    if not sessions:
+        return []
+    now = now_ms()
+    result = [(session.room_id, session.player_id) for session in sessions]
+    for session in sessions:
+        session.active_connections = 0
+        session.disconnected_at = now
+        session.last_seen_at = now
+        await session.save(
+            update_fields=["active_connections", "disconnected_at", "last_seen_at"]
+        )
+        await Player.filter(id=session.player_id).update(
+            connection_status="disconnected", disconnected_at=now
+        )
+    return result
 
 
 async def set_player_connection_status(player_id, connected):

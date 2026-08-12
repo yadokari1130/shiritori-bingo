@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useGameStore } from '../store/game'
 import BingoCard from './BingoCard.vue'
+import DisconnectedMark from './DisconnectedMark.vue'
 import { validateWordForFrontend } from '../utils/shiritori'
 
 const store = useGameStore()
@@ -97,22 +98,26 @@ const orderedCards = computed(() => {
     return store.orderedPlayers
       .filter((p) => Boolean(p.card))
       .map((p) => ({
-        id: p.id,
-        title: p.name,
-        subtitle: undefined,
-        card: p.card!,
+         id: p.id,
+         title: p.name,
+         subtitle: undefined,
+         members: [],
+         disconnected: p.connectionStatus === 'disconnected',
+         card: p.card!,
         disqualified: p.status === 'disqualified',
       }))
   }
   return store.orderedTeams
     .filter((t) => Boolean(t.card))
     .map((t, idx) => ({
-      id: t.id,
-      title: `チーム ${idx + 1}`,
-      subtitle: t.memberPlayerIds
-        .map((id) => store.gameState!.players.find((p) => p.id === id)?.name)
-        .filter((name): name is string => Boolean(name))
-        .join('、'),
+       id: t.id,
+       title: `チーム ${idx + 1}`,
+       subtitle: undefined,
+       disconnected: false,
+       members: t.memberPlayerIds
+         .map((id) => store.gameState!.players.find((p) => p.id === id))
+         .filter((player): player is NonNullable<typeof player> => Boolean(player))
+         .map((player) => ({ name: player.name, disconnected: player.connectionStatus === 'disconnected' })),
       card: t.card!,
       disqualified: t.status === 'disqualified',
     }))
@@ -348,6 +353,8 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
             :title="item.title"
             :subtitle="item.subtitle"
             :disqualified="item.disqualified"
+            :disconnected="item.disconnected"
+            :members="item.members"
             :preview-chars="previewChars"
             :is-current="isCurrentCard(item.id)"
           />
@@ -371,7 +378,7 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
                 'is-disqualified': item.disqualified,
               }"
             >
-              <span>{{ item.title }}</span>
+               <span>{{ item.title }}<DisconnectedMark v-if="item.disconnected" /></span>
               <span class="order-status">
                 {{ item.disqualified ? '失格' : (isCurrentCard(item.id) ? '入力中' : '参加中') }}
               </span>

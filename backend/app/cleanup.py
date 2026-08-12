@@ -28,7 +28,7 @@ def remove_player_from_state(state: GameState, player_id: str) -> bool:
 async def run_cleanup_loop() -> None:
     """古いルームと切断プレイヤーを削除するバックグラウンドタスク。"""
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(5)
         try:
             await _cleanup_once()
         except Exception:
@@ -37,6 +37,47 @@ async def run_cleanup_loop() -> None:
 
 async def _cleanup_once() -> None:
     now = dao.now_ms()
+
+    # 切断通知を受け取れない場合に備え、ハートビートの停止した接続を切断扱いにする。
+    stale_connections = await dao.expire_stale_sessions(now - 10 * 1000)
+    for room_id, player_id in set(stale_connections):
+        async with db._write_lock:
+            state = await dao.load_room_state(room_id)
+            if state is None:
+                continue
+            host_changed = False
+            if state.phase == "setup":
+                state.players = [p for p in state.players if p.id != player_id]
+                for team in state.teams:
+                    team.memberPlayerIds = [
+                        p.id for p in state.players if p.teamId == team.id
+                    ]
+                if state.hostPlayerId == player_id:
+                    connected = [
+                        p for p in state.players if p.connectionStatus == "connected"
+                    ]
+                    connected.sort(key=lambda p: p.sortOrder)
+                    state.hostPlayerId = connected[0].id if connected else None
+                    host_changed = True
+            else:
+                player = next((p for p in state.players if p.id == player_id), None)
+                if player is None:
+                    continue
+                player.connectionStatus = "disconnected"
+                player.disconnectedAt = now
+                if state.hostPlayerId == player_id:
+                    connected = [
+                        p for p in state.players if p.connectionStatus == "connected"
+                    ]
+                    connected.sort(key=lambda p: p.sortOrder)
+                    state.hostPlayerId = connected[0].id if connected else None
+                    host_changed = True
+            await dao.save_room_state(room_id, state)
+            await broadcast.broadcast(
+                room_id,
+                state,
+                notice="親が変更されました。" if host_changed else None,
+            )
 
     # 24時間経過したルームを削除
     cutoff_room = now - 24 * 60 * 60 * 1000

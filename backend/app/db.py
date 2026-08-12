@@ -7,6 +7,7 @@ from pathlib import Path
 from tortoise import Tortoise
 
 from app.config import get_tortoise_config
+from app import dao
 
 DB_PATH = Path(os.environ.get("DATABASE_PATH", Path(__file__).resolve().parent.parent / "data" / "shiritori-bingo.db"))
 _write_lock = asyncio.Lock()
@@ -28,6 +29,7 @@ async def init_db() -> None:
     """Aerichでスキーマを適用してからTortoiseを初期化する。"""
     _run_migrations()
     await Tortoise.init(config=get_tortoise_config(DB_PATH))
+    await dao.reset_connection_statuses()
 
 
 async def close_db() -> None:

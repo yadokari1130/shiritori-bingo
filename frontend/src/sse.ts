@@ -57,22 +57,23 @@ export class SseClient {
 
     try {
       // withCredentials で Cookie を送信する。仕様 14.2, 14.5
-      this.eventSource = new EventSource(this.url, { withCredentials: true })
+      const eventSource = new EventSource(this.url, { withCredentials: true })
+      this.eventSource = eventSource
 
-      this.eventSource.onopen = () => {
+      eventSource.onopen = () => {
         this.reconnectDelay = 1000
         this.options.onConnectionChange?.(true)
       }
 
-      this.eventSource.addEventListener('initial', (event: MessageEvent) => {
+      eventSource.addEventListener('initial', (event: MessageEvent) => {
         this.handlePayload(event.data)
       })
 
-      this.eventSource.addEventListener('update', (event: MessageEvent) => {
+      eventSource.addEventListener('update', (event: MessageEvent) => {
         this.handlePayload(event.data)
       })
 
-      this.eventSource.addEventListener('dissolved', (event: MessageEvent) => {
+      eventSource.addEventListener('dissolved', (event: MessageEvent) => {
         let message = '部屋が解散されました。'
         try {
           const parsed = JSON.parse(event.data) as { message?: string }
@@ -84,13 +85,13 @@ export class SseClient {
         this.options.onDissolved?.(message)
       })
 
-      this.eventSource.addEventListener('error', (event: MessageEvent) => {
+      eventSource.addEventListener('error', (event: MessageEvent) => {
         const message = this.parseErrorMessage(event.data)
         this.options.onError(message ?? 'サーバーでエラーが発生しました。')
       })
 
 
-      this.eventSource.addEventListener('ping', (event: MessageEvent) => {
+      eventSource.addEventListener('ping', (event: MessageEvent) => {
         let ts: number | undefined
         try {
           const parsed = JSON.parse(event.data) as { timestamp?: number }
@@ -101,7 +102,12 @@ export class SseClient {
         this.options.onPing?.(ts)
       })
 
-      this.eventSource.onerror = () => {
+      eventSource.onerror = () => {
+        // EventSource自体の自動再接続と二重にならないよう、古い接続を閉じる。
+        eventSource.close()
+        if (this.eventSource === eventSource) {
+          this.eventSource = null
+        }
         this.options.onConnectionChange?.(false)
         this.options.onError('通信が切断されました。再接続を試みます。')
         this.scheduleReconnect()

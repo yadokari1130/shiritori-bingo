@@ -251,6 +251,20 @@ export async function deleteRoom(roomId: string): Promise<void> {
 }
 
 
+/** ページ離脱時の切断通知を送信する（Beacon / KeepAlive） */
+export function notifyDisconnect(roomId: string): void {
+  const url = `${API_BASE_URL}/api/rooms/${roomId}/disconnect`
+  if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+    navigator.sendBeacon(url)
+  } else {
+    fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      keepalive: true,
+    }).catch(() => {})
+  }
+}
+
 /** SSE 接続 URL を取得する */
 export function getSseUrl(roomId: string): string {
   return `${API_BASE_URL}/api/rooms/${roomId}/events`

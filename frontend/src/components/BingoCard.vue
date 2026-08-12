@@ -3,12 +3,15 @@ import { computed } from 'vue'
 import type { BingoCard as BingoCardType } from '../types'
 import { buildCellFlags } from '../utils/bingo'
 import { isSmallKana } from '../utils/shiritori'
+import DisconnectedMark from './DisconnectedMark.vue'
 
 const props = withDefaults(
   defineProps<{
     card: BingoCardType
     title?: string
     subtitle?: string
+    members?: { name: string; disconnected: boolean }[]
+    disconnected?: boolean
     disqualified?: boolean
     previewChars?: string[]
     size?: 'small' | 'medium' | 'large'
@@ -17,6 +20,8 @@ const props = withDefaults(
   {
     title: '',
     subtitle: '',
+    members: () => [],
+    disconnected: false,
     disqualified: false,
     previewChars: () => [],
     size: 'medium',
@@ -78,8 +83,13 @@ function cellLabel(flags: ReturnType<typeof buildCellFlags>[number], char: strin
     <div class="player-card-header">
       <div class="player-card-name">
         <span :class="{ 'text-strike': disqualified }">{{ title || 'カード' }}</span>
+        <DisconnectedMark v-if="disconnected" />
         <small v-if="subtitle">{{ subtitle }}</small>
-        <small v-if="disqualified">失格</small>
+        <small v-if="members && members.length" class="team-members">
+          <span v-for="(member, index) in members" :key="member.name + index">
+            <span v-if="index > 0">、</span>{{ member.name }}<DisconnectedMark v-if="member.disconnected" />
+          </span>
+        </small>
       </div>
 
       <div class="header-badges">

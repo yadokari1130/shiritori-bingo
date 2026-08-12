@@ -25,6 +25,8 @@ describe('BingoCard コンポーネント', () => {
       props: {
         card,
         title: 'テストプレイヤー',
+        disconnected: true,
+        members: [{ name: 'メンバー', disconnected: true }],
       },
     })
 
@@ -43,5 +45,7 @@ describe('BingoCard コンポーネント', () => {
     expect(charSpans[1].classes()).toContain('is-small-char')
     expect(charSpans[2].classes()).toContain('is-small-char')
     expect(charSpans[5].classes()).toContain('is-small-char')
+    expect(wrapper.findAll('.disconnected-mark')).toHaveLength(2)
+    expect(wrapper.find('.disconnected-mark').attributes('aria-label')).toBe('切断中')
   })
 })
