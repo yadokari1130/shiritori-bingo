@@ -591,19 +591,29 @@ function onSelectPresetToEdit(presetId: string): void {
 }
 
 .extra-settings {
-  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .extra-settings > summary {
   cursor: pointer;
+  color: var(--navy);
+  font-size: 1.1rem;
+  font-weight: 800;
   list-style-position: inside;
+  user-select: none;
+}
+
+.extra-settings[open] > summary {
+  margin-bottom: 12px;
 }
 
 .extra-settings-body {
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-top: none;
-  background: #fffdfa;
+  padding: 0;
 }
 
 .number-input-row {
