@@ -234,12 +234,8 @@ export function validateConnection(
   return { valid: true }
 }
 
-/** フロントエンドで確定前に入力を検証する。仕様 7.4, 12.1 */
-export function validateWordForFrontend(
-  word: string,
-  requiredStartChar?: string,
-  isFirstWord = false,
-): { valid: boolean; reason?: string } {
+/** 入力文字列の基本形式（空文字、ひらがな・伸ばし棒以外）を検証する。常にフロントエンドで適用。 */
+export function validateBasicInputFormat(word: string): { valid: boolean; reason?: string } {
   const trimmed = word.trim()
   if (trimmed.length === 0) {
     return { valid: false, reason: '単語を入力してください。' }
@@ -247,15 +243,97 @@ export function validateWordForFrontend(
   if (!isValidInputChars(trimmed)) {
     return { valid: false, reason: 'ひらがなと伸ばし棒で入力してください。' }
   }
+  return { valid: true }
+}
+
+/** 単語がゲームルール条件（文字数、既出、接続、語尾）を満たすか検証する。 */
+export function validateWordRuleRequirements(
+  word: string,
+  options: {
+    requiredStartChar?: string
+    isFirstWord?: boolean
+    usedWords?: string[]
+    minWordLength?: number | null
+    maxWordLength?: number | null
+  } = {},
+): { valid: boolean; reason?: string } {
+  const trimmed = word.trim()
+  const { requiredStartChar, isFirstWord = false, usedWords = [], minWordLength, maxWordLength } = options
+
+  // 文字数制限
+  const len = trimmed.length
+  if (minWordLength !== null && minWordLength !== undefined && len < minWordLength) {
+    return { valid: false, reason: '設定された文字数の範囲外です。' }
+  }
+  if (maxWordLength !== null && maxWordLength !== undefined && len > maxWordLength) {
+    return { valid: false, reason: '設定された文字数の範囲外です。' }
+  }
+
+  // 既出単語
+  if (usedWords.includes(trimmed)) {
+    return { valid: false, reason: 'この単語はすでに使われています。' }
+  }
+
+  // しりとり接続
   if (requiredStartChar && requiredStartChar.length > 0) {
     if (isFirstWord) {
-      // 最初の単語はフリーマス文字と完全一致が必要（濁点緩和なし）。仕様 4.3.4
       if (trimmed[0] !== requiredStartChar) {
         return { valid: false, reason: `「${requiredStartChar}」から始めてください。` }
       }
-      return { valid: true }
+    } else {
+      const candidates = normalizeTail(requiredStartChar)
+      const first = trimmed[0]
+      if (candidates.length === 0 || !candidates.some((c) => isSameConnectionGroup(c, first))) {
+        return { valid: false, reason: '前の単語の最後の文字から始まっていません。' }
+      }
     }
-    return validateConnection(trimmed, requiredStartChar)
   }
+
+  // 語尾チェック（「ん」など）
+  const tailCandidates = normalizeTail(trimmed)
+  if (tailCandidates.length === 0) {
+    return { valid: false, reason: '「ん」で終わる単語は使えません。' }
+  }
+
   return { valid: true }
+}
+
+export interface ValidateWordForFrontendOptions {
+  inputWordCheck?: boolean
+  requiredStartChar?: string
+  isFirstWord?: boolean
+  usedWords?: string[]
+  minWordLength?: number | null
+  maxWordLength?: number | null
+}
+
+/** フロントエンドで確定前に入力を検証する。仕様 7.4, 12.1 */
+export function validateWordForFrontend(
+  word: string,
+  optionsOrRequiredStartChar?: ValidateWordForFrontendOptions | string,
+  isFirstWord = false,
+): { valid: boolean; reason?: string } {
+  // 基本形式（空文字・ひらがな伸ばし棒）は常に検証
+  const basicResult = validateBasicInputFormat(word)
+  if (!basicResult.valid) {
+    return basicResult
+  }
+
+  let options: ValidateWordForFrontendOptions
+  if (typeof optionsOrRequiredStartChar === 'string' || optionsOrRequiredStartChar === undefined) {
+    options = {
+      requiredStartChar: optionsOrRequiredStartChar,
+      isFirstWord,
+      inputWordCheck: true,
+    }
+  } else {
+    options = optionsOrRequiredStartChar
+  }
+
+  // 入力文字チェックが無効の場合は、基本形式以外のルールチェックを行わず通過させる
+  if (options.inputWordCheck === false) {
+    return { valid: true }
+  }
+
+  return validateWordRuleRequirements(word, options)
 }

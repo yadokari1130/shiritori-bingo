@@ -153,6 +153,21 @@ function teamMemberNames(teamId: string): string {
     .join('、')
 }
 
+function formatWordLengthLimit(settings: Settings): string {
+  const min = settings.minWordLength
+  const max = settings.maxWordLength
+  if (min !== null && max !== null) {
+    return `${min}〜${max}文字`
+  }
+  if (min !== null) {
+    return `${min}文字以上`
+  }
+  if (max !== null) {
+    return `${max}文字以下`
+  }
+  return '制限なし'
+}
+
 async function onGoToTop(): Promise<void> {
   if (store.myPlayer) {
     if (!confirm('ロビーから退出してトップ画面へ戻りますか？')) {
@@ -445,6 +460,11 @@ async function onDissolveRoom(): Promise<void> {
                   制限時間 {{ store.settings.timeLimitSeconds }}秒 / 初回エクストラ {{ store.settings.extraTimeSeconds }}秒{{ store.settings.forceSkipOnTimeout ? '（時間切れで強制スキップ）' : '' }}
                 </p>
                 <p><strong>無効入力の扱い:</strong> {{ store.settings.invalidAction === 'disqualify' ? '失格' : 'ターンスキップ' }}</p>
+                <p>
+                  <strong>エクストラルール:</strong>
+                  入力文字チェック: {{ store.settings.inputWordCheck ? '有効' : '無効' }} /
+                  文字数制限: {{ formatWordLengthLimit(store.settings) }}
+                </p>
               </div>
             </section>
           </div>

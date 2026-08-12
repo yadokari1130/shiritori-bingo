@@ -30,6 +30,7 @@ class Settings(BaseModel):
     extraTimeSeconds: int = 10
     forceSkipOnTimeout: bool = False
     invalidAction: Literal["skip", "disqualify"] = "skip"
+    inputWordCheck: bool = True
     minWordLength: int | None = None
     maxWordLength: int | None = None
 

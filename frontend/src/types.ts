@@ -27,6 +27,7 @@ export interface Settings {
   extraTimeSeconds: number
   forceSkipOnTimeout: boolean
   invalidAction: 'skip' | 'disqualify'
+  inputWordCheck: boolean
   minWordLength: number | null
   maxWordLength: number | null
 }
@@ -52,12 +53,11 @@ export function createDefaultSettings(): Settings {
     extraTimeSeconds: 10,
     forceSkipOnTimeout: false,
     invalidAction: 'skip',
+    inputWordCheck: true,
     minWordLength: null,
     maxWordLength: null,
   }
 }
-
-/** マスデータ */
 export interface Cell {
   index: number
   row: number

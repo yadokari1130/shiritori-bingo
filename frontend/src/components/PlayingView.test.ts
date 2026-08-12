@@ -189,4 +189,113 @@ describe('PlayingView タイマー・時間同期', () => {
     expect(wrapper.find('.timer-status').text()).toBe('時間切れ')
     expect(wrapper.find('.word-input').attributes('disabled')).toBeDefined()
   })
+
+  it('inputWordCheck: true（デフォルト）のとき、無効な単語（接続不一致）は送信できずエラーが表示される', async () => {
+    const store = useGameStore()
+    store.myPlayerId = 'p1'
+    const settings = createDefaultSettings()
+    settings.inputWordCheck = true
+    store.applyGameState({
+      phase: 'playing',
+      settings,
+      hostPlayerId: 'p1',
+      freeChar: 'あ',
+      players: [
+        {
+          id: 'p1',
+          name: '太郎',
+          teamId: null,
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: { size: 3, cells: [], freeChar: 'あ' },
+          bingoLineIds: [],
+          openedCellCount: 1,
+        },
+      ],
+      teams: [],
+      playOrder: ['p1'],
+      round: 1,
+      roundRoster: ['p1'],
+      orderIndex: 0,
+      currentPlayerId: 'p1',
+      currentTeamId: null,
+      requiredStartChar: 'あ',
+      usedWords: [],
+      wordHistory: [],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: Date.now(),
+      result: null,
+      undoHistory: [],
+    })
+
+    const submitSpy = vi.spyOn(store, 'submitWord').mockResolvedValue()
+    const wrapper = mount(PlayingView)
+
+    const input = wrapper.find('.word-input')
+    await input.setValue('いぬ') // 'あ' から始まっていない
+    await wrapper.find('.word-form').trigger('submit')
+
+    expect(submitSpy).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('「あ」から始めてください。')
+  })
+
+  it('inputWordCheck: false のとき、接続不一致な単語でも送信でき、空文字や非ひらがなのみ送信を防止する', async () => {
+    const store = useGameStore()
+    store.myPlayerId = 'p1'
+    const settings = createDefaultSettings()
+    settings.inputWordCheck = false
+    store.applyGameState({
+      phase: 'playing',
+      settings,
+      hostPlayerId: 'p1',
+      freeChar: 'あ',
+      players: [
+        {
+          id: 'p1',
+          name: '太郎',
+          teamId: null,
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: { size: 3, cells: [], freeChar: 'あ' },
+          bingoLineIds: [],
+          openedCellCount: 1,
+        },
+      ],
+      teams: [],
+      playOrder: ['p1'],
+      round: 1,
+      roundRoster: ['p1'],
+      orderIndex: 0,
+      currentPlayerId: 'p1',
+      currentTeamId: null,
+      requiredStartChar: 'あ',
+      usedWords: [],
+      wordHistory: [],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: Date.now(),
+      result: null,
+      undoHistory: [],
+    })
+
+    const submitSpy = vi.spyOn(store, 'submitWord').mockResolvedValue()
+    const wrapper = mount(PlayingView)
+
+    // 非ひらがな（漢字）は送信不可
+    const input = wrapper.find('.word-input')
+    await input.setValue('犬')
+    await wrapper.find('.word-form').trigger('submit')
+    expect(submitSpy).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('ひらがなと伸ばし棒で入力してください。')
+
+    // 接続不一致のひらがな単語（'いぬ'）は送信可能
+    await input.setValue('いぬ')
+    await wrapper.find('.word-form').trigger('submit')
+    expect(submitSpy).toHaveBeenCalledWith('いぬ')
+  })
 })

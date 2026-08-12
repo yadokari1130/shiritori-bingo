@@ -419,11 +419,24 @@ function onSelectPresetToEdit(presetId: string): void {
         </div>
       </fieldset>
 
-      <!-- エクストラ設定 -->
+      <!-- エクストラルール -->
       <details class="extra-settings">
-        <summary class="panel-fieldset panel-legend">エクストラ設定</summary>
+        <summary class="panel-fieldset panel-legend">エクストラルール</summary>
         <div class="extra-settings-body">
-          <p class="fieldset-note">単語の文字数を制限できます。設定した範囲外の単語は無効入力として扱います。</p>
+          <div class="field">
+            <label class="check-option">
+              <input
+                v-model="draft.inputWordCheck"
+                type="checkbox"
+                @change="updateDraft"
+              >
+              <span class="option-copy">
+                <strong>入力文字チェック</strong>
+                <small>有効の場合、しりとり接続や文字数制限、既出単語などの無効な単語の送信を防ぎます</small>
+              </span>
+            </label>
+          </div>
+          <p class="fieldset-note mt-3">単語の文字数を制限できます。設定した範囲外の単語は無効入力として扱います。</p>
           <div class="field-grid mt-2">
             <div class="field">
               <label for="minWordLength" class="field-label">最小文字数</label>

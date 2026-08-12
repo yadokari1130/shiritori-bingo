@@ -746,6 +746,56 @@ def test_result_disconnect_and_return_to_lobby_removes_disconnected_player():
         assert len(reconnect_gs["players"]) == 2
 
 
+def test_input_word_check_setting_and_invalid_word_action():
+    """inputWordCheck設定の反映と、無効単語送信時のバックエンドでのスキップ・失格判定テスト"""
+    settings = Settings(cardSize=3, invalidAction="skip", inputWordCheck=False)
+    with TestClient(app) as host_client, TestClient(app) as joiner_client:
+        res = host_client.post("/api/rooms", json={"settings": settings.model_dump()})
+        assert res.status_code == 200
+        room_id = res.json()["roomId"]
+        assert res.json()["gameState"]["settings"]["inputWordCheck"] is False
+
+        # 参加
+        h_join = host_client.post(f"/api/rooms/{room_id}/join", json={"name": "Host"})
+        host_pid = h_join.json()["playerId"]
+        j_join = joiner_client.post(f"/api/rooms/{room_id}/join", json={"name": "Joiner"})
+        joiner_pid = j_join.json()["playerId"]
+
+        # ゲーム開始
+        start_res = host_client.post(f"/api/rooms/{room_id}/start")
+        assert start_res.status_code == 200
+        state = start_res.json()["gameState"]
+        assert state["phase"] == "playing"
+
+        current_pid = state["currentPlayerId"]
+        current_client = host_client if current_pid == host_pid else joiner_client
+        other_pid = joiner_pid if current_pid == host_pid else host_pid
+
+        # 不正な文字種（漢字など）は400で弾かれ、手番は変わらない
+        act_invalid_chars = current_client.post(
+            f"/api/rooms/{room_id}/actions",
+            json={"type": "word", "word": "漢字"},
+        )
+        assert act_invalid_chars.status_code == 400
+
+        # 空文字も400で弾かれる
+        act_empty = current_client.post(
+            f"/api/rooms/{room_id}/actions",
+            json={"type": "word", "word": ""},
+        )
+        assert act_empty.status_code == 400
+
+        # ゲームルール上無効な単語（「ん」で終わる）を送信 -> ターンスキップが適用され手番が進む
+        act_invalid_rule = current_client.post(
+            f"/api/rooms/{room_id}/actions",
+            json={"type": "word", "word": "きりん"},
+        )
+        assert act_invalid_rule.status_code == 200
+        after_state = act_invalid_rule.json()["gameState"]
+        assert after_state["currentPlayerId"] == other_pid
+
+
+
 
 
 

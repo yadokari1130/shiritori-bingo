@@ -126,29 +126,72 @@ describe('shiritori ユーティリティ', () => {
   })
 
   describe('validateWordForFrontend', () => {
-    it('空文字は拒否', () => {
-      const result = validateWordForFrontend('')
-      expect(result.valid).toBe(false)
+    it('空文字は常に拒否', () => {
+      expect(validateWordForFrontend('').valid).toBe(false)
+      expect(validateWordForFrontend('', { inputWordCheck: false }).valid).toBe(false)
     })
 
-    it('ひらがな以外は拒否', () => {
-      const result = validateWordForFrontend('Tokyo')
-      expect(result.valid).toBe(false)
+    it('ひらがな・伸ばし棒以外は常に拒否', () => {
+      expect(validateWordForFrontend('Tokyo').valid).toBe(false)
+      expect(validateWordForFrontend('Tokyo', { inputWordCheck: false }).valid).toBe(false)
+      expect(validateWordForFrontend('漢字').valid).toBe(false)
+      expect(validateWordForFrontend('漢字', { inputWordCheck: false }).valid).toBe(false)
     })
 
-    it('接続条件を満たす単語は有効', () => {
-      const result = validateWordForFrontend('りんご', 'り')
-      expect(result.valid).toBe(true)
+    describe('inputWordCheck: true（デフォルト）の場合', () => {
+      it('接続条件を満たす単語は有効', () => {
+        const result = validateWordForFrontend('りんご', { requiredStartChar: 'り' })
+        expect(result.valid).toBe(true)
+      })
+
+      it('接続条件を満たさない単語は拒否', () => {
+        const result = validateWordForFrontend('ごりら', { requiredStartChar: 'り' })
+        expect(result.valid).toBe(false)
+        expect(result.reason).toBe('前の単語の最後の文字から始まっていません。')
+      })
+
+      it('最初の単語は濁点緩和なし', () => {
+        const result = validateWordForFrontend('がっこう', { requiredStartChar: 'か', isFirstWord: true })
+        expect(result.valid).toBe(false)
+      })
+
+      it('「ん」で終わる単語は拒否', () => {
+        const result = validateWordForFrontend('きりん', { requiredStartChar: 'き' })
+        expect(result.valid).toBe(false)
+        expect(result.reason).toBe('「ん」で終わる単語は使えません。')
+      })
+
+      it('既出単語は拒否', () => {
+        const result = validateWordForFrontend('りんご', { requiredStartChar: 'り', usedWords: ['りんご'] })
+        expect(result.valid).toBe(false)
+        expect(result.reason).toBe('この単語はすでに使われています。')
+      })
+
+      it('文字数制限外は拒否', () => {
+        const minRes = validateWordForFrontend('りす', { requiredStartChar: 'り', minWordLength: 3 })
+        expect(minRes.valid).toBe(false)
+        expect(minRes.reason).toBe('設定された文字数の範囲外です。')
+
+        const maxRes = validateWordForFrontend('りんご飴', { requiredStartChar: 'り' }) // 漢字で拒否
+        expect(maxRes.valid).toBe(false)
+
+        const maxRes2 = validateWordForFrontend('りんごばなな', { requiredStartChar: 'り', maxWordLength: 4 })
+        expect(maxRes2.valid).toBe(false)
+        expect(maxRes2.reason).toBe('設定された文字数の範囲外です。')
+      })
     })
 
-    it('接続条件を満たさない単語は拒否', () => {
-      const result = validateWordForFrontend('ごりら', 'り')
-      expect(result.valid).toBe(false)
-    })
-
-    it('最初の単語は濁点緩和なし', () => {
-      const result = validateWordForFrontend('がっこう', 'か', true)
-      expect(result.valid).toBe(false)
+    describe('inputWordCheck: false の場合', () => {
+      it('接続不一致や「ん」で終わる単語、既出単語、文字数範囲外でも空文字・非ひらがな以外は送信可能（valid: true）', () => {
+        // 接続不一致
+        expect(validateWordForFrontend('ごりら', { inputWordCheck: false, requiredStartChar: 'り' }).valid).toBe(true)
+        // 「ん」で終わる単語
+        expect(validateWordForFrontend('きりん', { inputWordCheck: false, requiredStartChar: 'き' }).valid).toBe(true)
+        // 既出単語
+        expect(validateWordForFrontend('りんご', { inputWordCheck: false, requiredStartChar: 'り', usedWords: ['りんご'] }).valid).toBe(true)
+        // 文字数範囲外
+        expect(validateWordForFrontend('りす', { inputWordCheck: false, requiredStartChar: 'り', minWordLength: 3 }).valid).toBe(true)
+      })
     })
   })
 

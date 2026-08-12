@@ -154,7 +154,14 @@ watch(
 )
 
 function validateInput(): boolean {
-  const result = validateWordForFrontend(inputWord.value, requiredStartChar.value, isFirstWord.value)
+  const result = validateWordForFrontend(inputWord.value, {
+    inputWordCheck: store.settings.inputWordCheck,
+    requiredStartChar: requiredStartChar.value,
+    isFirstWord: isFirstWord.value,
+    usedWords: store.gameState?.usedWords ?? [],
+    minWordLength: store.settings.minWordLength,
+    maxWordLength: store.settings.maxWordLength,
+  })
   if (!result.valid) {
     inputError.value = result.reason ?? ''
     return false
@@ -478,4 +485,3 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
   }
 }
 </style>
-
