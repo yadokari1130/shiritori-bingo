@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useGameStore } from '../store/game'
 import BingoCard from './BingoCard.vue'
 import DisconnectedMark from './DisconnectedMark.vue'
+import RuleExplanationModal from './RuleExplanationModal.vue'
 import { validateWordForFrontend } from '../utils/shiritori'
 
 const store = useGameStore()
@@ -11,6 +12,7 @@ const inputWord = ref('')
 const inputError = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
 const isSubmitting = ref(false)
+const showRuleModal = ref(false)
 
 const isFirstWord = computed(() => (store.gameState?.wordHistory.length ?? 0) === 0)
 const requiredStartChar = computed(() => store.gameState?.requiredStartChar ?? '')
@@ -224,7 +226,16 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
       <div>
         <h1>しりとりビンゴ 対戦中</h1>
       </div>
-      <div class="header-mark">対戦</div>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="secondary-button header-btn"
+          @click="showRuleModal = true"
+        >
+          📖 ルール説明
+        </button>
+        <div class="header-mark">対戦</div>
+      </div>
     </header>
 
     <!-- エラー・通知表示 -->
@@ -416,6 +427,12 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
         </section>
       </aside>
     </div>
+
+    <!-- ルール説明モーダル -->
+    <RuleExplanationModal
+      v-model="showRuleModal"
+      :settings="store.settings"
+    />
   </div>
 </template>
 
@@ -423,6 +440,19 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
 .game-screen {
   display: grid;
   gap: 20px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-btn {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .word-form {

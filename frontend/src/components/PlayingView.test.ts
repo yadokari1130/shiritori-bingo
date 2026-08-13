@@ -298,4 +298,61 @@ describe('PlayingView タイマー・時間同期', () => {
     await wrapper.find('.word-form').trigger('submit')
     expect(submitSpy).toHaveBeenCalledWith('いぬ')
   })
+
+  it('ルール説明ボタンを押すとルール説明モーダルが表示される', async () => {
+    const store = useGameStore()
+    store.myPlayerId = 'p1'
+    store.applyGameState({
+      phase: 'playing',
+      settings: createDefaultSettings(),
+      hostPlayerId: 'p1',
+      freeChar: 'あ',
+      players: [
+        {
+          id: 'p1',
+          name: '太郎',
+          teamId: null,
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: { size: 3, cells: [], freeChar: 'あ' },
+          bingoLineIds: [],
+          openedCellCount: 1,
+        },
+      ],
+      teams: [],
+      playOrder: ['p1'],
+      round: 1,
+      roundRoster: ['p1'],
+      orderIndex: 0,
+      currentPlayerId: 'p1',
+      currentTeamId: null,
+      requiredStartChar: 'あ',
+      usedWords: [],
+      wordHistory: [],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: Date.now(),
+      result: null,
+      undoHistory: [],
+    })
+
+    const wrapper = mount(PlayingView, {
+      attachTo: document.body,
+    })
+    expect(document.body.querySelector('.rule-modal-backdrop')).toBeNull()
+
+    // ルール説明ボタンをクリック
+    const ruleBtn = wrapper.findAll('button').find((b) => b.text().includes('ルール説明'))
+    expect(ruleBtn).toBeDefined()
+    await ruleBtn!.trigger('click')
+
+    const modal = document.body.querySelector('.rule-modal-backdrop')
+    expect(modal).not.toBeNull()
+    expect(modal?.textContent).toContain('ゲームルール説明')
+
+    wrapper.unmount()
+  })
 })
+

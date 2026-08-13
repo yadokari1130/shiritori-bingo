@@ -5,6 +5,7 @@ import { buildCardCharPool, maxCardSize } from '../utils/shiritori'
 import type { Settings } from '../types'
 import RuleSettingsForm from './RuleSettingsForm.vue'
 import DisconnectedMark from './DisconnectedMark.vue'
+import RuleExplanationModal from './RuleExplanationModal.vue'
 
 const store = useGameStore()
 
@@ -13,6 +14,7 @@ const editNameError = ref('')
 const editSettings = ref<Settings>({ ...store.draftSettings })
 const isUpdating = ref(false)
 const copied = ref(false)
+const showRuleModal = ref(false)
 
 watch(
   () => store.settings,
@@ -193,6 +195,13 @@ async function onDissolveRoom(): Promise<void> {
         <p>参加者が集まるまで待機してください。親（ホスト）が設定を確認してゲームを開始します。</p>
       </div>
       <div class="header-actions">
+        <button
+          type="button"
+          class="secondary-button header-btn"
+          @click="showRuleModal = true"
+        >
+          📖 ルール説明
+        </button>
         <button
           type="button"
           class="secondary-button header-btn"
@@ -471,6 +480,12 @@ async function onDissolveRoom(): Promise<void> {
         </v-col>
       </v-row>
     </div>
+
+    <!-- ルール説明モーダル -->
+    <RuleExplanationModal
+      v-model="showRuleModal"
+      :settings="store.isHost ? editSettings : store.settings"
+    />
   </div>
 </template>
 

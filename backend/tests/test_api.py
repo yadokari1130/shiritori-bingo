@@ -773,26 +773,27 @@ def test_input_word_check_setting_and_invalid_word_action():
 
         # 不正な文字種（漢字など）は400で弾かれ、手番は変わらない
         act_invalid_chars = current_client.post(
-            f"/api/rooms/{room_id}/actions",
+            f"/api/rooms/{room_id}/action",
             json={"type": "word", "word": "漢字"},
         )
         assert act_invalid_chars.status_code == 400
 
         # 空文字も400で弾かれる
         act_empty = current_client.post(
-            f"/api/rooms/{room_id}/actions",
+            f"/api/rooms/{room_id}/action",
             json={"type": "word", "word": ""},
         )
         assert act_empty.status_code == 400
 
         # ゲームルール上無効な単語（「ん」で終わる）を送信 -> ターンスキップが適用され手番が進む
         act_invalid_rule = current_client.post(
-            f"/api/rooms/{room_id}/actions",
+            f"/api/rooms/{room_id}/action",
             json={"type": "word", "word": "きりん"},
         )
         assert act_invalid_rule.status_code == 200
         after_state = act_invalid_rule.json()["gameState"]
         assert after_state["currentPlayerId"] == other_pid
+
 
 
 def test_start_game_with_updated_settings():
