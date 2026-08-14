@@ -232,6 +232,25 @@ export async function leaveRoom(roomId: string): Promise<void> {
   }
 }
 
+/** CPUプレイヤーを追加する（親のみ） */
+export async function addCpu(roomId: string): Promise<ApiGameStateResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/cpu`, {
+    method: 'POST',
+    headers: getHeaders(),
+    credentials: 'include',
+  })
+  return handleResponse<ApiGameStateResponse>(res)
+}
+
+/** 補助モード用：現在手番の推薦単語を取得する */
+export async function fetchWordSuggestions(roomId: string): Promise<{ suggestions: string[] }> {
+  const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/assist`, {
+    method: 'GET',
+    credentials: 'include',
+  })
+  return handleResponse<{ suggestions: string[] }>(res)
+}
+
 /** 部屋を解散する（親のみ） */
 export async function deleteRoom(roomId: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}`, {

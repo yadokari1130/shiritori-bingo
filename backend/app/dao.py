@@ -45,7 +45,7 @@ def _player_row(player: Player) -> dict:
     return {field: getattr(player, field) for field in (
         "id", "room_id", "name", "status", "card_json", "bingo_line_ids_json",
         "opened_cell_count", "sort_order", "team_id", "connection_status",
-        "disconnected_at",
+        "disconnected_at", "is_cpu",
     )}
 
 
@@ -107,6 +107,7 @@ async def load_room_state(room_id):
         if dbp:
             player.connectionStatus = dbp["connection_status"]
             player.disconnectedAt = dbp["disconnected_at"]
+            player.isCpu = dbp.get("is_cpu", False)
     for team in state.teams:
         team.memberPlayerIds = [p.id for p in state.players if p.teamId == team.id]
     return state
@@ -142,7 +143,7 @@ async def save_room_state(room_id, state):
                 "bingo_line_ids_json": _dump(player.bingoLineIds or []),
                 "opened_cell_count": player.openedCellCount, "sort_order": player.sortOrder,
                 "team_id": player.teamId, "connection_status": player.connectionStatus,
-                "disconnected_at": player.disconnectedAt,
+                "disconnected_at": player.disconnectedAt, "is_cpu": player.isCpu,
             },
         )
     if state.phase != "setup":

@@ -37,23 +37,26 @@ const orderedResults = computed(() => {
   if (snapshot.value.settings.mode === 'individual') {
     return snapshot.value.players.map((p) => ({
       id: p.playerId,
-       title: p.name,
-       subtitle: p.teamId ? 'チーム所属' : undefined,
-       members: [],
-       disconnected: p.connectionStatus === 'disconnected',
+      title: p.isCpu ? `🤖 ${p.name}` : p.name,
+      subtitle: p.teamId ? 'チーム所属' : undefined,
+      members: [],
+      disconnected: p.connectionStatus === 'disconnected',
       card: p.card,
       disqualified: p.status === 'disqualified',
     }))
   }
   return snapshot.value.teams.map((t, idx) => ({
-     id: t.teamId,
-     title: `チーム ${idx + 1}`,
-     subtitle: undefined,
-     disconnected: false,
-     members: t.memberPlayerIds
-       .map((id) => snapshot.value!.players.find((p) => p.playerId === id))
-       .filter((player): player is NonNullable<typeof player> => Boolean(player))
-       .map((player) => ({ name: player.name, disconnected: player.connectionStatus === 'disconnected' })),
+    id: t.teamId,
+    title: `チーム ${idx + 1}`,
+    subtitle: undefined,
+    disconnected: false,
+    members: t.memberPlayerIds
+      .map((id) => snapshot.value!.players.find((p) => p.playerId === id))
+      .filter((player): player is NonNullable<typeof player> => Boolean(player))
+      .map((player) => ({
+        name: player.isCpu ? `🤖 ${player.name}` : player.name,
+        disconnected: player.connectionStatus === 'disconnected',
+      })),
     card: t.card,
     disqualified: t.status === 'disqualified',
   }))
@@ -100,18 +103,24 @@ async function onReturnToLobby(): Promise<void> {
       <div class="header-mark">結果</div>
     </header>
 
-    <!-- エラー通知 -->
+    <!-- エラー・通知表示 -->
     <p v-if="store.errorMessage" class="notice error mb-3">
       {{ store.errorMessage }}
     </p>
+    <p v-if="store.noticeMessage" class="notice success mb-3">
+      {{ store.noticeMessage }}
+    </p>
 
-    <!-- 終了理由バナー -->
-    <div class="result-reason">
-      <p>
-        <strong>{{ reasonText }}</strong>
-        <span>（終了ターン: {{ result?.endRound ?? '-' }}ターン目）</span>
-      </p>
-    </div>
+    <!-- 結果サマリー -->
+    <section class="panel summary-panel">
+      <div class="summary-content">
+        <div class="summary-badge">GAME OVER</div>
+        <p class="summary-reason">{{ reasonText }}</p>
+        <p class="summary-sub">
+          終了ターン: {{ result?.endRound ?? 0 }}ターン目
+        </p>
+      </div>
+    </section>
 
     <!-- 順位セクション -->
     <section class="panel result-section">
@@ -149,6 +158,7 @@ async function onReturnToLobby(): Promise<void> {
                       ? `チーム ${(snapshot?.teams.findIndex((t) => t.teamId === ranking.subjectId) ?? 0) + 1}`
                       : '')
                    }}
+                   <span v-if="snapshot?.players.find((p) => p.playerId === ranking.subjectId)?.isCpu" class="tag-badge cpu-badge ml-1">🤖 CPU</span>
                    <DisconnectedMark
                      v-if="ranking.subjectType === 'player' && snapshot?.players.find((p) => p.playerId === ranking.subjectId)?.connectionStatus === 'disconnected'"
                    />
@@ -158,10 +168,10 @@ async function onReturnToLobby(): Promise<void> {
               <td>{{ ranking.openedCellCount }}マス</td>
               <td>
                 <span
-                  class="status-badge"
-                  :class="{ disqualified: ranking.status === 'disqualified' }"
+                  class="status-chip"
+                  :class="ranking.status === 'disqualified' ? 'is-disqualified' : 'is-active'"
                 >
-                  {{ ranking.status === 'disqualified' ? '失格' : '完走' }}
+                  {{ ranking.status === 'disqualified' ? '失格' : '有効' }}
                 </span>
               </td>
             </tr>
@@ -170,17 +180,15 @@ async function onReturnToLobby(): Promise<void> {
       </div>
     </section>
 
-    <!-- 全員の最終ビンゴカード一覧 -->
+    <!-- 全員のカードセクション -->
     <section class="panel result-section">
-      <div class="section-heading">
-        <h2>全員のビンゴカード</h2>
-        <button
-          type="button"
-          class="secondary-button btn-sm"
-          :aria-label="showCards ? '折りたたむ' : '展開する'"
-          @click="showCards = !showCards"
-        >
-          {{ showCards ? '非表示にする' : '表示する' }}
+      <div class="section-header-toggle" @click="showCards = !showCards">
+        <div class="section-heading">
+          <h2>全員のビンゴカード</h2>
+          <p>最終結果の盤面</p>
+        </div>
+        <button type="button" class="toggle-btn" :aria-expanded="showCards">
+          {{ showCards ? '▲ 閉じる' : '▼ 開く' }}
         </button>
       </div>
 
@@ -188,302 +196,343 @@ async function onReturnToLobby(): Promise<void> {
         <BingoCard
           v-for="item in orderedResults"
           :key="item.id"
-          :card="item.card!"
+          :card="item.card"
           :title="item.title"
-           :subtitle="item.subtitle"
-           :disconnected="item.disconnected"
-           :members="item.members"
+          :subtitle="item.subtitle"
           :disqualified="item.disqualified"
+          :disconnected="item.disconnected"
+          :members="item.members"
         />
       </div>
     </section>
 
-    <!-- 文字開放状態表（五十音表） -->
+    <!-- 開放文字一覧（あいうえお表） -->
     <section class="panel result-section">
-      <div class="section-heading">
-        <h2>文字開放状態表</h2>
-        <button
-          type="button"
-          class="secondary-button btn-sm"
-          :aria-label="showCharTable ? '折りたたむ' : '展開する'"
-          @click="showCharTable = !showCharTable"
-        >
-          {{ showCharTable ? '非表示にする' : '表示する' }}
+      <div class="section-header-toggle" @click="showCharTable = !showCharTable">
+        <div class="section-heading">
+          <h2>開放文字一覧</h2>
+          <p>全員のカードで開いた文字（緑色）</p>
+        </div>
+        <button type="button" class="toggle-btn" :aria-expanded="showCharTable">
+          {{ showCharTable ? '▲ 閉じる' : '▼ 開く' }}
         </button>
       </div>
 
-      <div v-show="showCharTable" class="kana-chart-wrapper mt-3">
-        <div class="kana-legend">
-          <span class="kana-legend-item">
-            <span class="kana-legend-mark is-open" /> 開放済み
-          </span>
-          <span class="kana-legend-item">
-            <span class="kana-legend-mark is-closed" /> 未開放
-          </span>
-          <span class="kana-legend-item">
-            <span class="kana-legend-mark is-free" /> FREEマス
-          </span>
-        </div>
-
-        <div class="kana-chart-layout">
-          <div class="kana-columns-box">
+      <div v-show="showCharTable" class="char-table-wrap mt-3">
+        <div class="char-table-grid">
+          <div
+            v-for="(col, colIdx) in charColumns"
+            :key="colIdx"
+            class="kana-col"
+          >
+            <div class="kana-col-header">{{ col.header }}</div>
             <div
-              v-for="column in charColumns"
-              :key="column.header"
-              class="kana-col"
+              v-for="(char, rowIdx) in col.chars"
+              :key="rowIdx"
+              class="kana-cell"
+              :class="{
+                'is-open': char ? isOpenedChar(char) : false,
+                'is-closed': char ? !isOpenedChar(char) : false,
+                'is-blank': !char,
+                'is-small': char ? isSmallKana(char) : false,
+              }"
             >
-              <div class="kana-col-header">{{ column.header }}</div>
-              <div
-                v-for="(char, rowIdx) in column.chars"
-                :key="`${column.header}-${rowIdx}`"
-                class="kana-cell"
-                :class="{
-                  'is-open': char ? isOpenedChar(char) : false,
-                  'is-closed': char ? !isOpenedChar(char) : false,
-                  'is-blank': !char,
-                }"
-              >
-                <span
-                  class="kana-character"
-                  :class="{ 'is-small-char': char ? isSmallKana(char) : false }"
-                >{{ char ?? '' }}</span>
-              </div>
+              {{ char ?? '' }}
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 単語履歴 -->
+    <!-- 単語履歴一覧 -->
     <section class="panel result-section">
-      <div class="section-heading">
-        <h2>入力された有効単語 ({{ history.length }}語)</h2>
-        <button
-          type="button"
-          class="secondary-button btn-sm"
-          :aria-label="showHistory ? '折りたたむ' : '展開する'"
-          @click="showHistory = !showHistory"
-        >
-          {{ showHistory ? '非表示にする' : '表示する' }}
-        </button>
-      </div>
-
-      <div v-show="showHistory" class="history-grid mt-3">
-        <div
-          v-for="(entry, idx) in history"
-          :key="historyKey(entry, idx)"
-          class="history-card"
-        >
-          <span class="history-word">{{ entry.word }}</span>
-          <span class="history-meta">
-            {{ snapshot?.players.find((p) => p.playerId === entry.playerId)?.name ?? '' }}
-            （{{ entry.round }}ターン目・{{ entry.sequence }}手番）
-          </span>
+      <div class="section-header-toggle" @click="showHistory = !showHistory">
+        <div class="section-heading">
+          <h2>使用単語履歴 (全{{ history.length }}単語)</h2>
+          <p>入力順</p>
         </div>
+        <button type="button" class="toggle-btn" :aria-expanded="showHistory">
+          {{ showHistory ? '▲ 閉じる' : '▼ 開く' }}
+        </button>
+      </div>
+
+      <div v-show="showHistory" class="history-table-wrap mt-3">
+        <div v-if="history.length === 0" class="empty-text">
+          単語履歴はありません。
+        </div>
+        <table v-else class="history-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>単語</th>
+              <th>入力者</th>
+              <th>ターン</th>
+              <th>開いた文字</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(entry, idx) in history"
+              :key="historyKey(entry, idx)"
+            >
+              <td>{{ entry.sequence }}</td>
+              <td><strong class="history-word-cell">{{ entry.word }}</strong></td>
+              <td>{{ snapshot?.players.find((p) => p.playerId === entry.playerId)?.name ?? '' }}</td>
+              <td>{{ entry.round }}</td>
+              <td>
+                <span v-if="entry.openedChars.length === 0" class="text-muted">なし</span>
+                <span v-else class="opened-chars-tag">
+                  {{ entry.openedChars.join('、') }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
-    <!-- アクション（ロビーに戻る） -->
-    <section class="result-actions-panel">
-      <div v-if="store.isHost" class="text-center">
-        <button
-          type="button"
-          class="primary-button return-lobby-btn"
-          @click="onReturnToLobby"
-        >
-          ゲーム終了（ロビーへ戻る）
-        </button>
-      </div>
-      <div v-else class="notice info text-center">
-        親（ホスト）がロビーへ戻るのを待機しています…
-      </div>
-    </section>
+    <!-- 親用：ロビーへ戻るボタン -->
+    <div v-if="store.isHost" class="result-actions">
+      <button
+        type="button"
+        class="primary-button btn-lg"
+        @click="onReturnToLobby"
+      >
+        ロビーに戻る（親のみ）
+      </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .result-screen {
-  display: grid;
-  gap: 20px;
-}
-
-.kana-chart-wrapper {
-  overflow-x: auto;
-  padding-bottom: 8px;
-}
-
-.kana-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px 14px;
-  margin: 0 0 12px;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.kana-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.kana-legend-mark {
-  width: 18px;
-  height: 18px;
-  border: 1px solid #cfc5b7;
-  border-radius: 4px;
-  background: #f8f3e9;
-}
-
-.kana-legend-mark.is-open {
-  border-color: var(--teal);
-  background: var(--teal-pale);
-}
-
-.kana-legend-mark.is-closed {
-  background: #fffefa;
-}
-
-.kana-legend-mark.is-free {
-  border-color: var(--gold);
-  background: var(--gold-pale);
-}
-
-.kana-columns-box {
-  display: flex;
-  flex-direction: row-reverse;
-  justify-content: center;
-  gap: 6px;
-  min-width: max-content;
+  max-width: 1100px;
   margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.screen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.screen-header h1 {
+  font-size: 1.6rem;
+  font-weight: 800;
+  margin: 0 0 0.25rem;
+}
+
+.screen-header p {
+  color: var(--color-text-secondary, #64748b);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.header-mark {
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 700;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+}
+
+.summary-panel {
+  text-align: center;
+  padding: 2rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.summary-badge {
+  display: inline-block;
+  background: var(--color-primary-subtle, #e0f2fe);
+  color: var(--color-primary, #0284c7);
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  padding: 0.3rem 0.9rem;
+  border-radius: 9999px;
+  margin-bottom: 0.75rem;
+}
+
+.summary-reason {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem;
+}
+
+.summary-sub {
+  color: var(--color-text-secondary, #64748b);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.result-section {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+}
+
+.section-heading h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.2rem;
+}
+
+.section-heading p {
+  color: var(--color-text-secondary, #64748b);
+  font-size: 0.825rem;
+  margin: 0;
+}
+
+.section-header-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  color: var(--color-primary, #0284c7);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.ranking-table-wrap,
+.history-table-wrap {
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+
+.ranking-table,
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.ranking-table th,
+.ranking-table td,
+.history-table th,
+.history-table td {
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.ranking-table th,
+.history-table th {
+  font-weight: 700;
+  background: var(--color-bg-subtle, #f8fafc);
+  color: var(--color-text-secondary, #475569);
+}
+
+.disqualified-row td {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.status-chip {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.status-chip.is-active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-chip.is-disqualified {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.cpu-badge {
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.char-table-wrap {
+  overflow-x: auto;
+  padding: 0.5rem 0;
+}
+
+.char-table-grid {
+  display: flex;
+  gap: 0.35rem;
 }
 
 .kana-col {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 0.35rem;
   align-items: center;
 }
 
 .kana-col-header {
-  height: 20px;
-  line-height: 20px;
-  font-size: 0.76rem;
-  font-weight: 800;
-  color: var(--muted);
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-secondary, #64748b);
+  margin-bottom: 0.15rem;
 }
 
 .kana-cell {
-  width: 36px;
-  height: 38px;
-  min-width: 36px;
-  max-width: 36px;
-  min-height: 38px;
-  max-height: 38px;
-  box-sizing: border-box;
-  padding: 0;
+  width: 2rem;
+  height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #cfc5b7;
-  border-radius: 6px;
-  background: #fffefa;
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: var(--ink);
-  line-height: 1;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-
-.kana-character {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  text-align: center;
-}
-
-.kana-character.is-small-char {
-  text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
-  text-decoration-skip-ink: none;
+  border-radius: 4px;
+  background: var(--color-bg-subtle, #f1f5f9);
+  color: var(--color-text-secondary, #64748b);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .kana-cell.is-open {
-  border-color: var(--teal);
-  background: var(--teal-pale);
-  color: #075d5a;
+  background: #22c55e;
+  color: white;
+  font-weight: 800;
 }
 
 .kana-cell.is-closed {
-  background: #fffefa;
-  color: #6f655a;
+  background: var(--color-bg-subtle, #f1f5f9);
+  color: var(--color-text-secondary, #64748b);
 }
 
 .kana-cell.is-blank {
-  border: 1px solid transparent;
   background: transparent;
-  pointer-events: none;
   visibility: hidden;
 }
 
-.history-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
+.kana-cell.is-small {
+  font-size: 0.7rem;
 }
 
-.history-card {
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fffefa;
-  display: grid;
-  gap: 2px;
+.opened-chars-tag {
+  color: #15803d;
+  font-weight: 600;
 }
 
-.history-card .history-word {
-  font-size: 1.1rem;
-  font-weight: 800;
-  color: var(--navy);
-}
-
-.history-card .history-meta {
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.result-actions-panel {
-  padding: 16px 0;
-}
-
-.return-lobby-btn {
-  font-size: 1.15rem;
-  padding: 14px 36px;
-}
-
-.btn-sm {
-  min-height: 32px;
-  padding: 4px 10px;
-  font-size: 0.82rem;
-}
-
-.text-danger {
-  color: var(--danger);
-}
-
-.text-center {
+.result-actions {
   text-align: center;
+  margin-top: 2rem;
 }
-
-.mt-3 { margin-top: 12px; }
-.mb-3 { margin-bottom: 12px; }
-.mb-4 { margin-bottom: 16px; }
 </style>
-

@@ -91,6 +91,7 @@ class Player(BaseModel):
     bingoLineIds: list[str] | None = None
     openedCellCount: int | None = None
     sortOrder: int = 0
+    isCpu: bool = False
 
 
 class Team(BaseModel):
@@ -137,6 +138,7 @@ class PlayerResult(BaseModel):
     bingoLineIds: list[str] | None = None
     openedCellCount: int | None = None
     connectionStatus: Literal["connected", "disconnected"] = "connected"
+    isCpu: bool = False
 
 
 class TeamResult(BaseModel):
@@ -289,3 +291,10 @@ ActionRequest = Annotated[
     WordAction | SkipAction | DisqualifyAction | UndoAction,
     Field(discriminator="type"),
 ]
+
+
+class AssistResponse(BaseModel):
+    """補助モード（アシスト機能）の候補単語レスポンス。"""
+
+    suggestions: list[str]
+

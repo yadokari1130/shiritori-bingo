@@ -37,11 +37,24 @@ const roomUrl = computed(() => {
   return `${window.location.origin}/game/${store.roomId}`
 })
 
+const isAddingCpu = ref(false)
+
+async function onAddCpu(): Promise<void> {
+  isAddingCpu.value = true
+  try {
+    await store.addCpu()
+  } finally {
+    isAddingCpu.value = false
+  }
+}
+
 const canStart = computed(() => {
   const state = store.gameState
   if (!state) return false
   if (!store.isHost) return false
   if (state.players.length < 2) return false
+  const humanPlayers = state.players.filter((p) => !p.isCpu)
+  if (humanPlayers.length < 1) return false
 
   const s = editSettings.value
   const pool = buildCardCharPool(s.cardOptions)
@@ -274,6 +287,7 @@ async function onDissolveRoom(): Promise<void> {
                   <div class="player-info">
                      <strong>{{ player.name }}<DisconnectedMark v-if="player.connectionStatus === 'disconnected'" /></strong>
                     <span v-if="player.id === store.myPlayerId" class="tag-badge current-badge">あなた</span>
+                    <span v-if="player.isCpu" class="tag-badge cpu-badge">🤖 CPU</span>
                   </div>
                   <div class="player-right">
                     <div class="player-badges">
@@ -283,6 +297,7 @@ async function onDissolveRoom(): Promise<void> {
                     </div>
                     <div v-if="store.isHost && player.id !== store.myPlayerId" class="player-actions">
                       <button
+                        v-if="!player.isCpu"
                         type="button"
                         class="secondary-button btn-xs"
                         @click="onChangeHost(player.id, player.name)"
@@ -294,12 +309,23 @@ async function onDissolveRoom(): Promise<void> {
                         class="danger-button btn-xs"
                         @click="onKickPlayer(player.id, player.name)"
                       >
-                        退出
+                        {{ player.isCpu ? '削除' : '退出' }}
                       </button>
                     </div>
                   </div>
                 </li>
               </ul>
+
+              <div v-if="store.isHost" class="add-cpu-container mt-3">
+                <button
+                  type="button"
+                  class="secondary-button w-100"
+                  :disabled="isAddingCpu"
+                  @click="onAddCpu"
+                >
+                  {{ isAddingCpu ? '追加中...' : '🤖 CPUプレイヤーを追加' }}
+                </button>
+              </div>
 
               <div class="name-edit-box mt-4">
                 <label for="editMyName" class="field-label">

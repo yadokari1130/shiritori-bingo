@@ -40,6 +40,7 @@ class Player(Model):
     team_id = fields.CharField(max_length=255, null=True)
     connection_status = fields.CharField(max_length=30, default="connected")
     disconnected_at = fields.BigIntField(null=True)
+    is_cpu = fields.BooleanField(default=False)
 
     class Meta:
         table = "players"

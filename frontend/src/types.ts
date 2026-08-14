@@ -1,10 +1,4 @@
-/**
- * しりとりビンゴの型定義
- *
- * 仕様書 9. データモデル・状態遷移 をベースにしている。
- */
-
-/** カード文字設定 */
+/** カード生成文字オプション */
 export interface CardOptions {
   yoon: boolean
   sokuon: boolean
@@ -14,50 +8,32 @@ export interface CardOptions {
   handakuten: boolean
 }
 
-/** ゲームルール設定 */
+/** ゲーム設定 */
 export interface Settings {
   cardSize: number
   mode: 'individual' | 'team'
   teamCount: number
-  cardOptions: CardOptions
+  timeLimitSeconds: number
+  extraTimeSeconds: number
   endCondition: 'turns' | 'bingos'
   targetTurns: number
   targetBingos: number
-  timeLimitSeconds: number
-  extraTimeSeconds: number
-  forceSkipOnTimeout: boolean
   invalidAction: 'skip' | 'disqualify'
-  inputWordCheck: boolean
+  cardOptions: CardOptions
   minWordLength: number | null
   maxWordLength: number | null
 }
 
-/** 初期設定値を返す */
-export function createDefaultSettings(): Settings {
-  return {
-    cardSize: 5,
-    mode: 'individual',
-    teamCount: 2,
-    cardOptions: {
-      yoon: false,
-      sokuon: false,
-      prolonged: false,
-      smallA: false,
-      dakuten: true,
-      handakuten: true,
-    },
-    endCondition: 'turns',
-    targetTurns: 3,
-    targetBingos: 3,
-    timeLimitSeconds: 30,
-    extraTimeSeconds: 10,
-    forceSkipOnTimeout: false,
-    invalidAction: 'skip',
-    inputWordCheck: true,
-    minWordLength: null,
-    maxWordLength: null,
-  }
+/** 設定プリセット */
+export interface Preset {
+  id: string
+  name: string
+  settings: Settings
+  createdAt: number
+  updatedAt: number
 }
+
+/** カードマス */
 export interface Cell {
   index: number
   row: number
@@ -85,6 +61,7 @@ export interface Player {
   card: BingoCard | null
   bingoLineIds: string[] | null
   openedCellCount: number | null
+  isCpu?: boolean
 }
 
 /** チーム */
@@ -126,6 +103,7 @@ export interface PlayerResult {
   bingoLineIds: string[] | null
   openedCellCount: number | null
   connectionStatus: 'connected' | 'disconnected'
+  isCpu?: boolean
 }
 
 /** 結果スナップショット内のチーム情報 */
@@ -157,94 +135,116 @@ export interface GameResult {
   snapshot: ResultSnapshot
 }
 
-/** undo スナップショット */
-export interface UndoSnapshot {
-  gameStateBeforeAction: GameSnapshot
-  restoredTurnTimeLimitMs: number
-}
-
-/** 復元用のゲームスナップショット（undoHistory を除く） */
-export type GameSnapshot = Omit<GameState, 'undoHistory'>
-
 /** ゲーム状態 */
 export interface GameState {
   phase: 'setup' | 'playing' | 'result'
   settings: Settings
-  hasPassword?: boolean
-  hostPlayerId: string | null
-  freeChar: string
+  hasPassword: boolean
+  freeChar: string | null
   players: Player[]
   teams: Team[]
   playOrder: string[]
-  round: number
-  roundRoster: string[]
-  orderIndex: number
   currentPlayerId: string | null
   currentTeamId: string | null
-  requiredStartChar: string
+  currentTurnInputPlayerId: string | null
+  requiredStartChar: string | null
   usedWords: string[]
   wordHistory: WordEntry[]
+  round: number
+  orderIndex: number
+  roundRoster: string[]
   remainingTimeMs: number
   currentTurnTimeLimitMs: number
-  currentTurnInputPlayerId: string | null
   turnStartedAt: number | null
   result: GameResult | null
-  undoHistory?: UndoSnapshot[]
+  hostPlayerId: string | null
+  undoHistory?: unknown[]
 }
 
-/** 名前付き設定プリセット */
-export interface Preset {
-  id: string
-  name: string
-  settings: Settings
-  createdAt: number
-  updatedAt: number
+/** アシスト候補レスポンス */
+export interface AssistResponse {
+  suggestions: string[]
 }
 
-/** SSE イベント種別 */
-export type SseEventType = 'initial' | 'update' | 'error' | 'ping'
+/** 接続状態 */
+export type SseConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
-/** SSE イベントペイロード */
-export interface SsePayload {
-  event: SseEventType
-  timestamp: number
-  gameState: GameState
-  notice?: string
+/** ルーム情報レスポンス */
+export interface RoomInfoResponse {
+  roomId: string
+  phase: 'setup' | 'playing' | 'result'
+  hasPassword: boolean
 }
 
-/** API レスポンス: ルーム作成 */
+/** ルーム作成レスポンス */
 export interface CreateRoomResponse {
   roomId: string
   url: string
   gameState: GameState
 }
 
-/** API レスポンス: 参加 */
+/** ルーム参加レスポンス */
 export interface JoinRoomResponse {
-  gameState: GameState
   playerId: string
   isHost: boolean
+  gameState?: GameState
 }
 
-/** API レスポンス: 汎用 */
+/** 汎用 GameState レスポンス */
 export interface ApiGameStateResponse {
   gameState: GameState
 }
 
-/** API レスポンス: アクション */
+/** アクション実行レスポンス */
 export interface ActionResponse {
   success: boolean
   gameState: GameState
 }
 
-/** API レスポンス: ルーム情報 */
-export interface RoomInfoResponse {
-  phase: 'setup' | 'playing' | 'result'
-  hasPassword: boolean
-}
+/** 接続状態（UI用） */
+export type ConnectionStatus = 'connected' | 'connecting' | 'reconnecting' | 'disconnected'
 
-/** フロントエンドの画面状態 */
+/** 画面ビューフェーズ */
 export type ViewPhase = 'top' | 'lobby' | 'playing' | 'result'
 
-/** 通信状態 */
-export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting'
+/** デフォルト設定を生成する */
+export function createDefaultSettings(): Settings {
+  return {
+    cardSize: 5,
+    mode: 'individual',
+    teamCount: 2,
+    timeLimitSeconds: 60,
+    extraTimeSeconds: 10,
+    endCondition: 'turns',
+    targetTurns: 5,
+    targetBingos: 1,
+    invalidAction: 'skip',
+    cardOptions: {
+      yoon: true,
+      sokuon: true,
+      prolonged: true,
+      smallA: false,
+      dakuten: false,
+      handakuten: false,
+    },
+    minWordLength: null,
+    maxWordLength: null,
+  }
+}
+
+/** GameStateから表示フェーズを判定する */
+export function resolveViewFromPhase(state: GameState | null): ViewPhase {
+  if (!state) return 'top'
+  switch (state.phase) {
+    case 'setup':
+      return 'lobby'
+    case 'playing':
+      return 'playing'
+    case 'result':
+      return 'result'
+    default:
+      return 'top'
+  }
+}
+
+

@@ -6,7 +6,7 @@ import secrets
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app import broadcast, dao, db, engine, security
+from app import broadcast, cpu, dao, db, engine, security
 from app.models import (
     ActionRequest,
     ChangeHostRequest,
@@ -58,12 +58,96 @@ def _public_state(state: GameState) -> dict:
 async def _elect_new_host_if_needed(state: GameState) -> bool:
     """ホストが不在の場合、接続中の先頭参加者をホストにする。変更があれば True。"""
     if state.hostPlayerId is None:
-        connected = [p for p in state.players if p.connectionStatus == "connected"]
+        connected = [p for p in state.players if p.connectionStatus == "connected" and not p.isCpu]
         connected.sort(key=lambda p: p.sortOrder)
         if connected:
             state.hostPlayerId = connected[0].id
             return True
     return False
+
+
+def _is_subject_cpu(state: GameState, subject_id: str | None) -> tuple[bool, str | None]:
+    """指定された subject_id (プレイヤーまたはチーム) が CPU かどうかと、入力実行プレイヤーIDを返す。"""
+    if not subject_id:
+        return False, None
+    if state.settings.mode == "individual":
+        p = next((p for p in state.players if p.id == subject_id), None)
+        if p and p.isCpu:
+            return True, p.id
+        return False, None
+    else:
+        team = next((t for t in state.teams if t.id == subject_id), None)
+        if not team:
+            return False, None
+        members = [p for p in state.players if p.id in team.memberPlayerIds]
+        if members and all(m.isCpu for m in members):
+            return True, members[0].id
+        return False, None
+
+
+def _trigger_cpu_turn_if_needed(room_id: str, state: GameState) -> None:
+    """現在手番がCPUの場合、非同期タスクで自動手番を実行する。"""
+    if state.phase != "playing":
+        return
+    current_subject = (
+        state.currentPlayerId
+        if state.settings.mode == "individual"
+        else state.currentTeamId
+    )
+    is_cpu, _ = _is_subject_cpu(state, current_subject)
+    if is_cpu:
+        asyncio.create_task(_run_cpu_turn(room_id, state.round, state.orderIndex))
+
+
+async def _run_cpu_turn(room_id: str, expected_round: int, expected_order_index: int) -> None:
+    """CPUの手番を思考ウェイトを挟んで実行する。"""
+    await asyncio.sleep(1.0)
+    async with db._write_lock:
+        state = await dao.load_room_state(room_id)
+        if state is None or state.phase != "playing":
+            return
+        if state.round != expected_round or state.orderIndex != expected_order_index:
+            return
+
+        current_subject = (
+            state.currentPlayerId
+            if state.settings.mode == "individual"
+            else state.currentTeamId
+        )
+        is_cpu, cpu_player_id = _is_subject_cpu(state, current_subject)
+        if not is_cpu or cpu_player_id is None or current_subject is None:
+            return
+
+        now = dao.now_ms()
+        best_word = cpu.select_best_word(state, current_subject)
+        notice: str | None = None
+
+        if best_word is not None:
+            try:
+                engine.process_word(state, cpu_player_id, best_word, now)
+                if state.wordHistory:
+                    await dao.add_word_history(room_id, state.wordHistory[-1])
+                if state.undoHistory:
+                    await dao.add_undo_snapshot(room_id, state.undoHistory[-1])
+                opened_count = len(state.wordHistory[-1].openedChars)
+                p_name = next((p.name for p in state.players if p.id == cpu_player_id), "CPU")
+                notice = f"🤖 {p_name} が「{best_word}」を入力しました（{opened_count}マス開放）。"
+            except Exception:
+                engine.process_skip(state, now)
+                if state.undoHistory:
+                    await dao.add_undo_snapshot(room_id, state.undoHistory[-1])
+                notice = "🤖 手詰まりのためスキップしました。"
+        else:
+            engine.process_skip(state, now)
+            if state.undoHistory:
+                await dao.add_undo_snapshot(room_id, state.undoHistory[-1])
+            notice = "🤖 出せる単語がないためスキップしました。"
+
+        await dao.save_room_state(room_id, state)
+        await broadcast.broadcast(room_id, state, notice=notice)
+
+        _trigger_cpu_turn_if_needed(room_id, state)
+
 
 
 @router.post("/api/rooms")
@@ -250,6 +334,60 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
     security.set_session_cookie(response, new_token)
     security.clear_creator_cookie(response)
     return response
+
+
+@router.post("/api/rooms/{room_id}/cpu")
+async def add_cpu(room_id: str, request: Request):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        state = await dao.load_room_state(room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.hostPlayerId != player_id:
+            raise HTTPException(status_code=403, detail="親だけがCPUを追加できます")
+        if state.phase != "setup":
+            raise HTTPException(status_code=403, detail="ロビー中のみ追加できます")
+
+        cpu_count = sum(1 for p in state.players if p.isCpu)
+        name = f"CPU {cpu_count + 1}"
+        cpu_id = dao.generate_uuid()
+        sort_order = await dao.get_next_player_sort_order(room_id)
+        status = "active" if state.settings.mode == "individual" else None
+        new_cpu = Player(
+            id=cpu_id,
+            name=name,
+            status=status,  # type: ignore[arg-type]
+            connectionStatus="connected",
+            sortOrder=sort_order,
+            isCpu=True,
+        )
+        state.players.append(new_cpu)
+
+        await dao.save_room_state(room_id, state)
+        await broadcast.broadcast(
+            room_id, state, notice=f"🤖 {name} が追加されました。"
+        )
+    return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+
+
+@router.get("/api/rooms/{room_id}/assist")
+async def get_assist(room_id: str, request: Request):
+    state = await dao.load_room_state(room_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="ルームが存在しません")
+    if state.phase != "playing":
+        return JSONResponse(status_code=200, content={"suggestions": []})
+
+    current_subject = (
+        state.currentPlayerId
+        if state.settings.mode == "individual"
+        else state.currentTeamId
+    )
+    if not current_subject:
+        return JSONResponse(status_code=200, content={"suggestions": []})
+
+    suggestions = cpu.get_assist_suggestions(state, current_subject, count=3)
+    return JSONResponse(status_code=200, content={"suggestions": suggestions})
 
 
 @router.put("/api/rooms/{room_id}/name")
@@ -478,6 +616,11 @@ async def start_game(
             raise HTTPException(
                 status_code=400, detail="参加者が2人以上必要です"
             )
+        human_players = [p for p in state.players if not p.isCpu]
+        if not human_players:
+            raise HTTPException(
+                status_code=400, detail="人間プレイヤーが1人以上必要です"
+            )
         if state.settings.mode == "team":
             for team in state.teams:
                 team.memberPlayerIds = [
@@ -497,6 +640,7 @@ async def start_game(
         await dao.delete_word_history_for_room(room_id)
         await dao.save_room_state(room_id, state)
         await broadcast.broadcast(room_id, state)
+        _trigger_cpu_turn_if_needed(room_id, state)
     return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
 
 
@@ -757,6 +901,7 @@ async def action(room_id: str, request: Request, body: ActionRequest):
 
         await dao.save_room_state(room_id, state)
         await broadcast.broadcast(room_id, state, notice=notice)
+        _trigger_cpu_turn_if_needed(room_id, state)
     return JSONResponse(
         status_code=200, content={"success": True, "gameState": _public_state(state)}
     )

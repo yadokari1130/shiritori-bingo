@@ -35,6 +35,13 @@ export const useGameStore = defineStore('game', () => {
   // SSE クライアント
   let sseClient: SseClient | null = null
 
+  // 補助モード設定（localStorage永続化）
+  const ASSIST_STORAGE_KEY = 'shiritori-bingo:assist-mode'
+  const assistMode = ref<boolean>(
+    typeof localStorage !== 'undefined' && localStorage.getItem(ASSIST_STORAGE_KEY) === 'true'
+  )
+  const wordSuggestions = ref<string[]>([])
+
   // 派生状態
   const players = computed(() => gameState.value?.players ?? [])
   const teams = computed(() => gameState.value?.teams ?? [])
@@ -68,9 +75,23 @@ export const useGameStore = defineStore('game', () => {
     return ''
   })
 
+  const isCurrentSubjectCpu = computed(() => {
+    if (!gameState.value || gameState.value.phase !== 'playing') return false
+    if (gameState.value.settings.mode === 'individual') {
+      const p = gameState.value.players.find((pl) => pl.id === gameState.value!.currentPlayerId)
+      return !!p?.isCpu
+    } else {
+      const t = gameState.value.teams.find((tm) => tm.id === gameState.value!.currentTeamId)
+      if (!t) return false
+      const members = gameState.value.players.filter((p) => t.memberPlayerIds.includes(p.id))
+      return members.length > 0 && members.every((m) => m.isCpu)
+    }
+  })
+
   const canInput = computed(() => {
     if (!gameState.value || gameState.value.phase !== 'playing') return false
     if (!myPlayerId.value || !myPlayer.value) return false
+    if (isCurrentSubjectCpu.value) return false
 
     if (gameState.value.settings.mode === 'individual') {
       return gameState.value.currentPlayerId === myPlayerId.value
@@ -149,6 +170,11 @@ export const useGameStore = defineStore('game', () => {
 
     gameState.value = state
     view.value = resolveViewFromPhase(state)
+    if (state.phase === 'playing' && assistMode.value && canInput.value) {
+      void fetchWordSuggestions()
+    } else if (state.phase !== 'playing' || !canInput.value) {
+      wordSuggestions.value = []
+    }
     if (notice) {
       noticeMessage.value = notice
       setTimeout(() => {
@@ -504,6 +530,45 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  /** 補助モードの切り替え */
+  function setAssistMode(enabled: boolean): void {
+    assistMode.value = enabled
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(ASSIST_STORAGE_KEY, String(enabled))
+    }
+    if (enabled && canInput.value) {
+      void fetchWordSuggestions()
+    } else {
+      wordSuggestions.value = []
+    }
+  }
+
+  /** 補助モード用：単語推薦の取得 */
+  async function fetchWordSuggestions(): Promise<void> {
+    const id = roomId.value
+    if (!id || !assistMode.value) return
+    try {
+      const res = await api.fetchWordSuggestions(id)
+      wordSuggestions.value = res.suggestions
+    } catch {
+      wordSuggestions.value = []
+    }
+  }
+
+  /** CPUプレイヤーを追加する（親のみ） */
+  async function addCpu(): Promise<void> {
+    const id = roomId.value
+    if (!id) return
+    errorMessage.value = null
+    try {
+      const res = await api.addCpu(id)
+      applyGameState(res.gameState)
+    } catch (err) {
+      errorMessage.value = err instanceof api.ApiError ? err.message : 'CPUを追加できませんでした。'
+      throw err
+    }
+  }
+
   function clearError(): void {
     errorMessage.value = null
   }
@@ -527,6 +592,8 @@ export const useGameStore = defineStore('game', () => {
     lastCreatedPassword,
     gameState,
     serverTimeOffset,
+    assistMode,
+    wordSuggestions,
     // getters
     players,
     teams,
@@ -534,6 +601,7 @@ export const useGameStore = defineStore('game', () => {
     phase,
     myPlayer,
     currentSubjectName,
+    isCurrentSubjectCpu,
     canInput,
     canUndo,
     orderedPlayers,
@@ -567,6 +635,8 @@ export const useGameStore = defineStore('game', () => {
     disconnectSse,
     getNowOnServer,
     updateServerTimeOffset,
+    setAssistMode,
+    fetchWordSuggestions,
+    addCpu,
   }
-
 })

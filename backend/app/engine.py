@@ -554,6 +554,7 @@ def _build_result_snapshot(state: GameState) -> ResultSnapshot:
                 bingoLineIds=player.bingoLineIds,
                 openedCellCount=player.openedCellCount,
                 connectionStatus=player.connectionStatus,
+                isCpu=player.isCpu,
             )
         )
     team_results: list[TeamResult] = []

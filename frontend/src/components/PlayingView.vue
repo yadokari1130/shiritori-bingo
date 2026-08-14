@@ -101,7 +101,7 @@ const orderedCards = computed(() => {
       .filter((p) => Boolean(p.card))
       .map((p) => ({
          id: p.id,
-         title: p.name,
+         title: p.isCpu ? `🤖 ${p.name}` : p.name,
          subtitle: undefined,
          members: [],
          disconnected: p.connectionStatus === 'disconnected',
@@ -119,7 +119,10 @@ const orderedCards = computed(() => {
        members: t.memberPlayerIds
          .map((id) => store.gameState!.players.find((p) => p.id === id))
          .filter((player): player is NonNullable<typeof player> => Boolean(player))
-         .map((player) => ({ name: player.name, disconnected: player.connectionStatus === 'disconnected' })),
+         .map((player) => ({
+           name: player.isCpu ? `🤖 ${player.name}` : player.name,
+           disconnected: player.connectionStatus === 'disconnected',
+         })),
       card: t.card!,
       disqualified: t.status === 'disqualified',
     }))
@@ -200,6 +203,18 @@ async function onDisqualify(): Promise<void> {
   const id = currentSubjectId.value
   if (!id || !store.isHost) return
   await store.submitDisqualify(id)
+}
+
+function onSelectSuggestion(word: string): void {
+  inputWord.value = word
+  validateInput()
+  if (inputRef.value) {
+    inputRef.value.focus()
+  }
+}
+
+function toggleAssistMode(): void {
+  store.setAssistMode(!store.assistMode)
 }
 
 function formatTime(seconds: number): string {
@@ -320,17 +335,51 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
           </div>
         </div>
 
+        <div class="assist-mode-row mt-2 d-flex justify-space-between align-center">
+          <div class="assist-toggle">
+            <button
+              type="button"
+              class="assist-toggle-btn"
+              :class="{ 'is-active': store.assistMode }"
+              @click="toggleAssistMode"
+            >
+              <span class="assist-icon">💡</span>
+              補助モード: {{ store.assistMode ? 'ON' : 'OFF' }}
+            </button>
+            <span class="assist-description">（有効な単語候補を提案します）</span>
+          </div>
+          <p class="word-length-counter" aria-live="polite">
+            文字数: {{ inputWord.length }}文字
+          </p>
+        </div>
+
+        <!-- 補助モードの推薦単語チップ -->
+        <div v-if="store.assistMode && store.canInput && store.wordSuggestions.length > 0" class="assist-suggestions-box mt-3">
+          <span class="assist-suggestions-label">💡 おすすめ単語:</span>
+          <div class="assist-chips">
+            <button
+              v-for="word in store.wordSuggestions"
+              :key="word"
+              type="button"
+              class="assist-chip"
+              @click="onSelectSuggestion(word)"
+            >
+              {{ word }}
+            </button>
+          </div>
+        </div>
+
         <p v-if="inputError" class="notice error mt-2">
           {{ inputError }}
+        </p>
+        <p v-else-if="store.isCurrentSubjectCpu" class="help-note cpu-thinking mt-2">
+          🤖 CPUが思考中です... 次の手番までお待ちください。
         </p>
         <p v-else-if="!store.canInput" class="help-note mt-2">
           ※他のプレイヤーの手番中です。自分の手番になるまでお待ちください。
         </p>
         <p v-else class="help-note mt-2">
           入力はひらがなと伸ばし棒のみ送信できます。
-        </p>
-        <p class="word-length-counter mt-2" aria-live="polite">
-          文字数: {{ inputWord.length }}文字
         </p>
 
         <!-- ホスト用緊急アクション -->
@@ -503,8 +552,97 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
 
 .ml-2 { margin-left: 8px; }
 .mt-2 { margin-top: 8px; }
-.mt-3 { margin-top: 12px; }
-.mb-3 { margin-bottom: 12px; }
+.assist-mode-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.assist-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.assist-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 1px solid var(--line, #cbd5e1);
+  background: var(--surface, #f8fafc);
+  color: var(--color-text-secondary, #64748b);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.assist-toggle-btn.is-active {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fcd34d;
+}
+
+.assist-description {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary, #64748b);
+}
+
+.assist-suggestions-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: #fffbeb;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #fef3c7;
+}
+
+.assist-suggestions-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.assist-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.assist-chip {
+  padding: 4px 12px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  color: #b45309;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.assist-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+  background: #fffdf5;
+}
+
+.cpu-thinking {
+  color: #6366f1;
+  font-weight: 600;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
 
 @media (max-width: 600px) {
   .input-row {
