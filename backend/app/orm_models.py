@@ -3,7 +3,7 @@ from tortoise.models import Model
 
 
 class Room(Model):
-    id = fields.CharField(max_length=255, pk=True)
+    id = fields.CharField(max_length=255, primary_key=True)
     password_hash = fields.TextField(null=True)
     creator_token_hash = fields.TextField(null=True)
     settings_json = fields.TextField()
@@ -29,7 +29,7 @@ class Room(Model):
 
 
 class Player(Model):
-    id = fields.CharField(max_length=255, pk=True)
+    id = fields.CharField(max_length=255, primary_key=True)
     room = fields.ForeignKeyField("models.Room", related_name="players", on_delete=fields.CASCADE)
     name = fields.TextField()
     status = fields.CharField(max_length=30, null=True)
@@ -47,7 +47,7 @@ class Player(Model):
 
 
 class Team(Model):
-    id = fields.CharField(max_length=255, pk=True)
+    id = fields.CharField(max_length=255, primary_key=True)
     room = fields.ForeignKeyField("models.Room", related_name="teams", on_delete=fields.CASCADE)
     sort_order = fields.IntField(default=0)
     status = fields.CharField(max_length=30, default="active")
@@ -60,7 +60,7 @@ class Team(Model):
 
 
 class PlayerSession(Model):
-    id = fields.CharField(max_length=255, pk=True)
+    id = fields.CharField(max_length=255, primary_key=True)
     room = fields.ForeignKeyField("models.Room", related_name="sessions", on_delete=fields.CASCADE)
     player = fields.ForeignKeyField("models.Player", related_name="sessions", on_delete=fields.CASCADE)
     token_hash = fields.CharField(max_length=255, unique=True)
@@ -73,7 +73,7 @@ class PlayerSession(Model):
 
 
 class WordHistory(Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     room = fields.ForeignKeyField("models.Room", related_name="word_history", on_delete=fields.CASCADE)
     player_id = fields.CharField(max_length=255)
     word = fields.TextField()
@@ -87,7 +87,7 @@ class WordHistory(Model):
 
 
 class UndoSnapshot(Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     room = fields.ForeignKeyField("models.Room", related_name="undo_snapshots", on_delete=fields.CASCADE)
     snapshot_json = fields.TextField()
     restored_turn_time_limit_ms = fields.BigIntField()

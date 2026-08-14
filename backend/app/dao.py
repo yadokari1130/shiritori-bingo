@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 import json
 import time
 import uuid
+
+from tortoise.transactions import in_transaction
 
 from app.models import GameState, UndoSnapshot
 from app.orm_models import (
@@ -54,21 +54,22 @@ async def create_room(room_id, password_hash, settings, creator_token_hash=None)
 
     state = GameState(phase="setup", settings=settings, hasPassword=bool(password_hash))
     now = now_ms()
-    await Room.create(
-        id=room_id, password_hash=password_hash, creator_token_hash=creator_token_hash,
-        settings_json=settings.model_dump_json(), phase=state.phase,
-        free_char=state.freeChar, required_start_char=state.requiredStartChar,
-        state_json=state.model_dump_json(), created_at=now, updated_at=now,
-        host_player_id=None, round_roster_json="[]",
-    )
-    if settings.mode == "team":
-        for i in range(settings.teamCount):
-            team_id = generate_uuid()
-            await Team.create(id=team_id, room_id=room_id, sort_order=i)
-            state.teams.append(TeamState(id=team_id, sortOrder=i))
-        room = await Room.get(id=room_id)
-        room.state_json = state.model_dump_json()
-        await room.save(update_fields=["state_json"])
+    async with in_transaction():
+        await Room.create(
+            id=room_id, password_hash=password_hash, creator_token_hash=creator_token_hash,
+            settings_json=settings.model_dump_json(), phase=state.phase,
+            free_char=state.freeChar, required_start_char=state.requiredStartChar,
+            state_json=state.model_dump_json(), created_at=now, updated_at=now,
+            host_player_id=None, round_roster_json="[]",
+        )
+        if settings.mode == "team":
+            for i in range(settings.teamCount):
+                team_id = generate_uuid()
+                await Team.create(id=team_id, room_id=room_id, sort_order=i)
+                state.teams.append(TeamState(id=team_id, sortOrder=i))
+            room = await Room.get(id=room_id)
+            room.state_json = state.model_dump_json()
+            await room.save(update_fields=["state_json"])
     return state
 
 
@@ -114,55 +115,56 @@ async def load_room_state(room_id):
 
 
 async def save_room_state(room_id, state):
-    room = await Room.get(id=room_id)
-    room.settings_json = state.settings.model_dump_json()
-    room.phase = state.phase
-    room.free_char = state.freeChar
-    room.current_player_id = state.currentPlayerId if state.settings.mode == "individual" else None
-    room.current_team_id = state.currentTeamId if state.settings.mode == "team" else None
-    room.required_start_char = state.requiredStartChar
-    room.round = state.round
-    room.order_index = state.orderIndex
-    room.remaining_time_ms = state.remainingTimeMs
-    room.current_turn_time_limit_ms = state.currentTurnTimeLimitMs
-    room.turn_started_at = state.turnStartedAt
-    room.result_json = state.result.model_dump_json() if state.result else None
-    room.state_json = state.model_dump_json()
-    room.updated_at = now_ms()
-    room.host_player_id = state.hostPlayerId
-    room.round_roster_json = _dump(state.roundRoster)
-    await room.save()
+    async with in_transaction():
+        room = await Room.get(id=room_id)
+        room.settings_json = state.settings.model_dump_json()
+        room.phase = state.phase
+        room.free_char = state.freeChar
+        room.current_player_id = state.currentPlayerId if state.settings.mode == "individual" else None
+        room.current_team_id = state.currentTeamId if state.settings.mode == "team" else None
+        room.required_start_char = state.requiredStartChar
+        room.round = state.round
+        room.order_index = state.orderIndex
+        room.remaining_time_ms = state.remainingTimeMs
+        room.current_turn_time_limit_ms = state.currentTurnTimeLimitMs
+        room.turn_started_at = state.turnStartedAt
+        room.result_json = state.result.model_dump_json() if state.result else None
+        room.state_json = state.model_dump_json()
+        room.updated_at = now_ms()
+        room.host_player_id = state.hostPlayerId
+        room.round_roster_json = _dump(state.roundRoster)
+        await room.save()
 
-    state_ids = {p.id for p in state.players}
-    for player in state.players:
-        await Player.update_or_create(
-            id=player.id,
-            defaults={
-                "room_id": room_id, "name": player.name, "status": player.status,
-                "card_json": player.card.model_dump_json() if player.card else None,
-                "bingo_line_ids_json": _dump(player.bingoLineIds or []),
-                "opened_cell_count": player.openedCellCount, "sort_order": player.sortOrder,
-                "team_id": player.teamId, "connection_status": player.connectionStatus,
-                "disconnected_at": player.disconnectedAt, "is_cpu": player.isCpu,
-            },
-        )
-    if state.phase != "setup":
-        for player in await Player.filter(room_id=room_id).exclude(id__in=state_ids):
-            await PlayerSession.filter(player_id=player.id).delete()
-            await player.delete()
+        state_ids = {p.id for p in state.players}
+        for player in state.players:
+            await Player.update_or_create(
+                id=player.id,
+                defaults={
+                    "room_id": room_id, "name": player.name, "status": player.status,
+                    "card_json": player.card.model_dump_json() if player.card else None,
+                    "bingo_line_ids_json": _dump(player.bingoLineIds or []),
+                    "opened_cell_count": player.openedCellCount, "sort_order": player.sortOrder,
+                    "team_id": player.teamId, "connection_status": player.connectionStatus,
+                    "disconnected_at": player.disconnectedAt, "is_cpu": player.isCpu,
+                },
+            )
+        if state.phase != "setup":
+            for player in await Player.filter(room_id=room_id).exclude(id__in=state_ids):
+                await PlayerSession.filter(player_id=player.id).delete()
+                await player.delete()
 
-    state_team_ids = {t.id for t in state.teams}
-    for team in state.teams:
-        await Team.update_or_create(
-            id=team.id,
-            defaults={
-                "room_id": room_id, "sort_order": team.sortOrder, "status": team.status,
-                "card_json": team.card.model_dump_json() if team.card else None,
-                "bingo_line_ids_json": _dump(team.bingoLineIds or []),
-                "opened_cell_count": team.openedCellCount,
-            },
-        )
-    await Team.filter(room_id=room_id).exclude(id__in=state_team_ids).delete()
+        state_team_ids = {t.id for t in state.teams}
+        for team in state.teams:
+            await Team.update_or_create(
+                id=team.id,
+                defaults={
+                    "room_id": room_id, "sort_order": team.sortOrder, "status": team.status,
+                    "card_json": team.card.model_dump_json() if team.card else None,
+                    "bingo_line_ids_json": _dump(team.bingoLineIds or []),
+                    "opened_cell_count": team.openedCellCount,
+                },
+            )
+        await Team.filter(room_id=room_id).exclude(id__in=state_team_ids).delete()
 
 
 async def create_session(session_id, room_id, player_id, token_hash):
@@ -278,18 +280,16 @@ async def list_rooms_updated_before(timestamp_ms):
 
 
 async def list_disconnected_players_to_remove(phase, before_ms):
-    rooms = {r.id for r in await Room.filter(phase=phase)}
-    return [(p.room_id, p.id) for p in await Player.filter(room_id__in=rooms,
-        connection_status="disconnected", disconnected_at__lt=before_ms)]
+    players = await Player.filter(
+        room__phase=phase,
+        connection_status="disconnected",
+        disconnected_at__lt=before_ms,
+    ).values_list("room_id", "id")
+    return [(r_id, p_id) for r_id, p_id in players]
 
 
 async def list_empty_rooms(before_ms):
-    rooms = await Room.filter(updated_at__lt=before_ms)
-    result = []
-    for room in rooms:
-        if not await Player.filter(room_id=room.id).exists():
-            result.append(room.id)
-    return result
+    return [r.id for r in await Room.filter(updated_at__lt=before_ms, players__id__isnull=True)]
 
 
 async def list_playing_rooms():

@@ -31,6 +31,8 @@ async def init_db() -> None:
     _write_lock = asyncio.Lock()
     _run_migrations()
     await Tortoise.init(config=get_tortoise_config(DB_PATH))
+    conn = Tortoise.get_connection("default")
+    await conn.execute_script("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")
     await dao.reset_connection_statuses()
 
 
