@@ -7,4 +7,6 @@ def test_health() -> None:
     response = TestClient(app).get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json()["status"] == "ok"
+    assert response.json().get("db") == "connected"
+    assert "X-Request-ID" in response.headers

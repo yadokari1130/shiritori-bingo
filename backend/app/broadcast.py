@@ -85,12 +85,15 @@ async def broadcast_event(
 
 
 
-def _public_state(state: GameState) -> dict:
-    """SSE配信用に内部データを除いた公開状態を返す。"""
+def public_state(state: GameState) -> dict:
+    """レスポンス/SSE配信用に内部データを除いた公開状態を返す。"""
     data = state.model_dump(mode="json")
     # undo 履歴は内部データとして配信しない
     data.pop("undoHistory", None)
     return data
+
+
+_public_state = public_state
 
 
 def format_sse(payload: dict) -> str:

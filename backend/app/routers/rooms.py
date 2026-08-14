@@ -48,11 +48,7 @@ async def _require_player(request: Request) -> str:
     return player_id
 
 
-def _public_state(state: GameState) -> dict:
-    """レスポンス/SSE 用に undo 履歴を除いた公開状態を返す。"""
-    data = state.model_dump(mode="json")
-    data.pop("undoHistory", None)
-    return data
+_public_state = broadcast.public_state
 
 
 async def _elect_new_host_if_needed(state: GameState) -> bool:
@@ -119,28 +115,20 @@ async def _run_cpu_turn(room_id: str, expected_round: int, expected_order_index:
             return
 
         now = dao.now_ms()
-        best_word = cpu.select_best_word(state, current_subject)
+        best_word = await asyncio.to_thread(cpu.select_best_word, state, current_subject)
         notice: str | None = None
 
         if best_word is not None:
             try:
                 engine.process_word(state, cpu_player_id, best_word, now)
-                if state.wordHistory:
-                    await dao.add_word_history(room_id, state.wordHistory[-1])
-                if state.undoHistory:
-                    await dao.add_undo_snapshot(room_id, state.undoHistory[-1])
                 opened_count = len(state.wordHistory[-1].openedChars)
                 p_name = next((p.name for p in state.players if p.id == cpu_player_id), "CPU")
                 notice = f"🤖 {p_name} が「{best_word}」を入力しました（{opened_count}マス開放）。"
             except Exception:
                 engine.process_skip(state, now)
-                if state.undoHistory:
-                    await dao.add_undo_snapshot(room_id, state.undoHistory[-1])
                 notice = "🤖 手詰まりのためスキップしました。"
         else:
             engine.process_skip(state, now)
-            if state.undoHistory:
-                await dao.add_undo_snapshot(room_id, state.undoHistory[-1])
             notice = "🤖 出せる単語がないためスキップしました。"
 
         await dao.save_room_state(room_id, state)
@@ -154,7 +142,7 @@ async def _run_cpu_turn(room_id: str, expected_round: int, expected_order_index:
 async def create_room(request: Request, body: CreateRoomRequest):
     room_id = secrets.token_urlsafe(12)
     password_hash = (
-        security.hash_password(body.password) if body.password else None
+        await security.hash_password_async(body.password) if body.password else None
     )
     creator_token = security.generate_session_token()
     creator_token_hash = security.hash_token(creator_token)
@@ -218,7 +206,7 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
     if session is None:
         password_hash = row["password_hash"]
         # 作成者本人でない場合のみパスワードを検証
-        if not is_creator and password_hash and not security.verify_password(body.password or "", password_hash):
+        if not is_creator and password_hash and not await security.verify_password_async(body.password or "", password_hash):
             raise HTTPException(status_code=403, detail="パスワードが違います")
         if not body.name:
             raise HTTPException(status_code=400, detail="名前を入力してください")
@@ -386,7 +374,9 @@ async def get_assist(room_id: str, request: Request):
     if not current_subject:
         return JSONResponse(status_code=200, content={"suggestions": []})
 
-    suggestions = cpu.get_assist_suggestions(state, current_subject, count=3)
+    suggestions = await asyncio.to_thread(
+        cpu.get_assist_suggestions, state, current_subject, count=3
+    )
     return JSONResponse(status_code=200, content={"suggestions": suggestions})
 
 
@@ -988,6 +978,7 @@ async def events(room_id: str, request: Request):
                     notice="親が変更されました。" if host_changed else None,
                 )
 
+            last_touch_ms = dao.now_ms()
             while not disconnect_task.done():
                 get_task = asyncio.create_task(queue.get())
                 done, pending = await asyncio.wait(
@@ -998,17 +989,21 @@ async def events(room_id: str, request: Request):
                 if disconnect_task in done:
                     get_task.cancel()
                     break
+
+                now_touch = dao.now_ms()
+                if now_touch - last_touch_ms >= 30_000:
+                    await dao.touch_session(session["id"])
+                    last_touch_ms = now_touch
+
                 if get_task in done:
                     payload = get_task.result()
-                    await dao.touch_session(session["id"])
                     yield broadcast.format_sse(payload)
                 else:
                     get_task.cancel()
-                    await dao.touch_session(session["id"])
                     yield broadcast.format_sse(
                         {
                             "event": "ping",
-                            "timestamp": dao.now_ms(),
+                            "timestamp": now_touch,
                         }
                     )
         finally:

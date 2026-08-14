@@ -133,6 +133,19 @@ def _calculate_tail_attack_score(tail_char: str, base_weight: float = 50.0) -> f
     return round(score, 2)
 
 
+def _card_metrics_from_indices(size: int, open_indices: set[int]) -> tuple[int, int, int]:
+    """(bingo_count, reach_count, open_count) を高速に計算する。"""
+    bingo_count = 0
+    reach_count = 0
+    for _, indexes in line_definitions(size):
+        unopened = sum(1 for idx in indexes if idx not in open_indices)
+        if unopened == 0:
+            bingo_count += 1
+        elif unopened == 1:
+            reach_count += 1
+    return bingo_count, reach_count, len(open_indices)
+
+
 def score_word(
     word: str,
     state: GameState,
@@ -161,16 +174,18 @@ def score_word(
     if self_card is None:
         return 0.0
 
-    # 自分の現状
-    self_orig_bingo = len(compute_bingo_lines(self_card))
-    self_orig_reach = len(compute_reach_lines(self_card))
-    self_orig_open = count_open_cells(self_card)
+    # 自分の現状とシミュレーション
+    self_open_indexes = {c.index for c in self_card.cells if c.isOpen}
+    self_orig_bingo, self_orig_reach, self_orig_open = _card_metrics_from_indices(self_card.size, self_open_indexes)
 
-    # 自分のシミュレーション後
-    self_sim_card = _simulate_card_opening(self_card, opened_chars)
-    self_sim_bingo = len(compute_bingo_lines(self_sim_card))
-    self_sim_reach = len(compute_reach_lines(self_sim_card))
-    self_sim_open = count_open_cells(self_sim_card)
+    # 開放文字の適用
+    self_sim_indexes = set(self_open_indexes)
+    for ch in opened_chars:
+        for cell in self_card.cells:
+            if cell.char == ch and cell.index not in self_sim_indexes:
+                self_sim_indexes.add(cell.index)
+                break
+    self_sim_bingo, self_sim_reach, self_sim_open = _card_metrics_from_indices(self_card.size, self_sim_indexes)
 
     delta_self_bingo = self_sim_bingo - self_orig_bingo
     delta_self_reach = self_sim_reach - self_orig_reach
@@ -201,14 +216,16 @@ def score_word(
                 opp_cards.append(tm.card)
 
     for opp_card in opp_cards:
-        opp_orig_bingo = len(compute_bingo_lines(opp_card))
-        opp_orig_reach = len(compute_reach_lines(opp_card))
-        opp_orig_open = count_open_cells(opp_card)
+        opp_open_indexes = {c.index for c in opp_card.cells if c.isOpen}
+        opp_orig_bingo, opp_orig_reach, opp_orig_open = _card_metrics_from_indices(opp_card.size, opp_open_indexes)
 
-        opp_sim_card = _simulate_card_opening(opp_card, opened_chars)
-        opp_sim_bingo = len(compute_bingo_lines(opp_sim_card))
-        opp_sim_reach = len(compute_reach_lines(opp_sim_card))
-        opp_sim_open = count_open_cells(opp_sim_card)
+        opp_sim_indexes = set(opp_open_indexes)
+        for ch in opened_chars:
+            for cell in opp_card.cells:
+                if cell.char == ch and cell.index not in opp_sim_indexes:
+                    opp_sim_indexes.add(cell.index)
+                    break
+        opp_sim_bingo, opp_sim_reach, opp_sim_open = _card_metrics_from_indices(opp_card.size, opp_sim_indexes)
 
         delta_opp_bingo = opp_sim_bingo - opp_orig_bingo
         delta_opp_reach = opp_sim_reach - opp_orig_reach

@@ -123,7 +123,7 @@ async def _cleanup_once() -> None:
 async def run_forced_skip_loop() -> None:
     """強制スキップ設定が有効なルームの時間切れを監視する。"""
     while True:
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1.0)
         try:
             await _forced_skip_once()
         except Exception:
@@ -132,23 +132,33 @@ async def run_forced_skip_loop() -> None:
 
 async def _forced_skip_once() -> None:
     now = dao.now_ms()
-    for room_id in await dao.list_playing_rooms():
+    from app.orm_models import Room
+
+    # 制限時間を経過した可能性がある playing ルームのみを絞り込み
+    playing_rooms = await Room.filter(phase="playing", turn_started_at__isnull=False)
+    for room in playing_rooms:
+        if room.turn_started_at is None:
+            continue
+        elapsed = now - room.turn_started_at
+        if elapsed < room.current_turn_time_limit_ms:
+            continue
+
         async with db._write_lock:
-            state = await dao.load_room_state(room_id)
+            state = await dao.load_room_state(room.id)
             if state is None or state.phase != "playing":
                 continue
             if not state.settings.forceSkipOnTimeout:
                 continue
             if state.turnStartedAt is None:
                 continue
-            elapsed = now - state.turnStartedAt
-            if elapsed < state.currentTurnTimeLimitMs:
+            current_elapsed = now - state.turnStartedAt
+            if current_elapsed < state.currentTurnTimeLimitMs:
                 continue
             try:
                 engine.process_skip(state, now)
-                await dao.save_room_state(room_id, state)
+                await dao.save_room_state(room.id, state)
                 await broadcast.broadcast(
-                    room_id,
+                    room.id,
                     state,
                     notice="時間切れでスキップしました。",
                 )

@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import os
 import secrets
@@ -36,13 +37,23 @@ def hash_token(token: str) -> str:
 
 
 def hash_password(password: str) -> str:
-    """bcryptでパスワードをハッシュ化する。"""
+    """bcryptでパスワードをハッシュ化する（同期版）。"""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    """bcryptでパスワードを検証する。"""
+    """bcryptでパスワードを検証する（同期版）。"""
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+
+
+async def hash_password_async(password: str) -> str:
+    """bcryptでパスワードを非同期スレッドプールでハッシュ化する。"""
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def verify_password_async(password: str, hashed: str) -> bool:
+    """bcryptでパスワードを非同期スレッドプールで検証する。"""
+    return await asyncio.to_thread(verify_password, password, hashed)
 
 
 def set_session_cookie(response, token: str) -> None:

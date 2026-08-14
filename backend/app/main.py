@@ -1,14 +1,20 @@
-from __future__ import annotations
-
 import asyncio
+import logging
 import os
+import time
+import uuid
+from collections import defaultdict
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from tortoise import Tortoise
 
 from app import cleanup, db
 from app.routers import rooms
+
+logger = logging.getLogger("shiritori_bingo")
 
 
 def _load_allowed_origins() -> list[str]:
@@ -16,8 +22,11 @@ def _load_allowed_origins() -> list[str]:
     raw = os.environ.get("FRONTEND_ORIGIN", "")
     if raw:
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
-    # ローカル開発用のデフォルト
-    return ["http://localhost:5173"]
+    # ローカル開発用・テスト用のデフォルト
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
 
 @asynccontextmanager
@@ -42,6 +51,48 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="しりとりビンゴ API", lifespan=lifespan)
 
+# 簡易インメモリレートリミッター（IPごとのリクエスト履歴を保持）
+_RATE_LIMIT_BUCKET: dict[str, list[float]] = defaultdict(list)
+_MAX_REQUESTS_PER_MINUTE = 300  # 1分間に最大300リクエスト
+
+
+@app.middleware("http")
+async def security_and_rate_limit_middleware(request: Request, call_next):
+    # 1. Request ID の生成とコンテキスト付与
+    request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16]
+
+    # 2. レートリミット（簡易スライディングウィンドウ）
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    timestamps = _RATE_LIMIT_BUCKET[client_ip]
+    # 60秒以内のタイムスタンプのみ保持
+    _RATE_LIMIT_BUCKET[client_ip] = [ts for ts in timestamps if now - ts < 60.0]
+    if len(_RATE_LIMIT_BUCKET[client_ip]) >= _MAX_REQUESTS_PER_MINUTE:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "リクエスト数が上限を超えました。しばらく待ってから再試行してください。"},
+            headers={"X-Request-ID": request_id},
+        )
+    _RATE_LIMIT_BUCKET[client_ip].append(now)
+
+    # 3. Origin チェック（状態変更リクエストのみ）
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        origin = request.headers.get("origin")
+        if origin:
+            allowed = _load_allowed_origins()
+            # ワイルドカードでない場合のみチェック
+            if allowed and "*" not in allowed and origin not in allowed:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "不正なオリジンからのリクエストです。"},
+                    headers={"X-Request-ID": request_id},
+                )
+
+    response: Response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_load_allowed_origins(),
@@ -54,6 +105,15 @@ app.include_router(rooms.router)
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    """起動確認用のヘルスチェックを返す。"""
-    return {"status": "ok"}
+async def health() -> dict[str, str]:
+    """起動確認およびデータベース導通確認用ヘルスチェック。"""
+    try:
+        conn = Tortoise.get_connection("default")
+        await conn.execute_query("SELECT 1")
+        return {"status": "ok", "db": "connected"}
+    except Exception as exc:
+        logger.error(f"Health check DB failed: {exc}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "detail": "Database connection failed"},
+        )
