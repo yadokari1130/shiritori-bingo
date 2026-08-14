@@ -114,7 +114,7 @@ async function onReturnToLobby(): Promise<void> {
     <!-- 結果サマリー -->
     <section class="panel summary-panel">
       <div class="summary-content">
-        <div class="summary-badge">GAME OVER</div>
+        <div class="summary-badge">GAME SET</div>
         <p class="summary-reason">{{ reasonText }}</p>
         <p class="summary-sub">
           終了ターン: {{ result?.endRound ?? 0 }}ターン目
