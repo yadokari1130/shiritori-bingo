@@ -6,7 +6,7 @@ import secrets
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app import broadcast, cpu, dao, db, engine, security
+from app import broadcast, cleanup, cpu, dao, db, engine, security
 from app.models import (
     ActionRequest,
     ChangeHostRequest,
@@ -52,12 +52,16 @@ _public_state = broadcast.public_state
 
 
 async def _elect_new_host_if_needed(state: GameState) -> bool:
-    """ホストが不在の場合、接続中の先頭参加者をホストにする。変更があれば True。"""
-    if state.hostPlayerId is None:
-        connected = [p for p in state.players if p.connectionStatus == "connected" and not p.isCpu]
-        connected.sort(key=lambda p: p.sortOrder)
-        if connected:
-            state.hostPlayerId = connected[0].id
+    """ホストが不在またはCPUの場合、接続中の先頭参加者をホストにする。変更があれば True。"""
+    is_invalid_host = (
+        state.hostPlayerId is None
+        or state.hostPlayerId not in {p.id for p in state.players}
+        or any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+    )
+    if is_invalid_host:
+        new_host = cleanup.elect_host(state.players)
+        if new_host != state.hostPlayerId:
+            state.hostPlayerId = new_host
             return True
     return False
 
@@ -253,7 +257,9 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
 
         await dao.set_player_connection_status(player_id, True)
         host_changed = False
-        if state.hostPlayerId is None:
+        if state.hostPlayerId is None or any(
+            p.id == state.hostPlayerId and p.isCpu for p in state.players
+        ):
             state.hostPlayerId = player_id
             host_changed = True
         is_host = state.hostPlayerId == player_id
@@ -292,7 +298,9 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
     )
     state.players.append(player)
     host_changed = False
-    if state.hostPlayerId is None:
+    if state.hostPlayerId is None or any(
+        p.id == state.hostPlayerId and p.isCpu for p in state.players
+    ):
         state.hostPlayerId = player_id
         is_host = True
     elif is_creator:
@@ -451,24 +459,22 @@ async def disconnect_room(room_id: str, request: Request):
                 team.memberPlayerIds = [
                     p.id for p in state.players if p.teamId == team.id
                 ]
-            if state.hostPlayerId == player_id:
-                connected = [
-                    p for p in state.players if p.connectionStatus == "connected"
-                ]
-                connected.sort(key=lambda p: p.sortOrder)
-                state.hostPlayerId = connected[0].id if connected else None
+            if state.hostPlayerId == player_id or (
+                state.hostPlayerId is not None
+                and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+            ):
+                state.hostPlayerId = cleanup.elect_host(state.players)
                 host_changed = True
         else:
             player = next((p for p in state.players if p.id == player_id), None)
             if player is not None:
                 player.connectionStatus = "disconnected"
                 player.disconnectedAt = dao.now_ms()
-            if state.hostPlayerId == player_id:
-                connected = [
-                    p for p in state.players if p.connectionStatus == "connected"
-                ]
-                connected.sort(key=lambda p: p.sortOrder)
-                state.hostPlayerId = connected[0].id if connected else None
+            if state.hostPlayerId == player_id or (
+                state.hostPlayerId is not None
+                and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+            ):
+                state.hostPlayerId = cleanup.elect_host(state.players)
                 host_changed = True
 
         await dao.save_room_state(room_id, state)
@@ -513,10 +519,11 @@ async def cleanup_remove_player(
     """プレイヤー削除と空ルーム処理を行う。ホスト変更があれば True。"""
     before_host = state.hostPlayerId
     state.players = [p for p in state.players if p.id != player_id]
-    if state.hostPlayerId == player_id:
-        connected = [p for p in state.players if p.connectionStatus == "connected"]
-        connected.sort(key=lambda p: p.sortOrder)
-        state.hostPlayerId = connected[0].id if connected else None
+    if state.hostPlayerId == player_id or (
+        state.hostPlayerId is not None
+        and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+    ):
+        state.hostPlayerId = cleanup.elect_host(state.players)
     for team in state.teams:
         team.memberPlayerIds = [
             p.id for p in state.players if p.teamId == team.id
@@ -684,11 +691,12 @@ async def return_to_lobby(room_id: str, request: Request):
             ]
 
         host_changed = False
-        if state.hostPlayerId not in {p.id for p in state.players}:
-            connected = [p for p in state.players if p.connectionStatus == "connected"]
-            connected.sort(key=lambda p: p.sortOrder)
-            state.hostPlayerId = connected[0].id if connected else None
-            host_changed = True
+        current_host = next((p for p in state.players if p.id == state.hostPlayerId), None)
+        if current_host is None or current_host.isCpu:
+            new_host = cleanup.elect_host(state.players)
+            if new_host != state.hostPlayerId:
+                state.hostPlayerId = new_host
+                host_changed = True
 
         await dao.delete_undo_snapshots_for_room(room_id)
         await dao.delete_word_history_for_room(room_id)
@@ -712,8 +720,13 @@ async def change_host(room_id: str, request: Request, body: ChangeHostRequest):
             raise HTTPException(status_code=403, detail="親だけが変更できます")
         if state.phase != "setup":
             raise HTTPException(status_code=403, detail="ロビー中のみ変更できます")
-        if body.playerId not in {p.id for p in state.players}:
+        target_player = next((p for p in state.players if p.id == body.playerId), None)
+        if target_player is None:
             raise HTTPException(status_code=400, detail="対象の参加者が存在しません")
+        if target_player.isCpu:
+            raise HTTPException(status_code=400, detail="CPUを親に指定することはできません")
+        if target_player.connectionStatus != "connected":
+            raise HTTPException(status_code=400, detail="切断中の参加者を親に指定することはできません")
         state.hostPlayerId = body.playerId
         await dao.save_room_state(room_id, state)
         await broadcast.broadcast(
@@ -1026,16 +1039,11 @@ async def events(room_id: str, request: Request):
                                     for p in state.players
                                     if p.teamId == team.id
                                 ]
-                            if state.hostPlayerId == player_id:
-                                connected = [
-                                    p
-                                    for p in state.players
-                                    if p.connectionStatus == "connected"
-                                ]
-                                connected.sort(key=lambda p: p.sortOrder)
-                                state.hostPlayerId = (
-                                    connected[0].id if connected else None
-                                )
+                            if state.hostPlayerId == player_id or (
+                                state.hostPlayerId is not None
+                                and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+                            ):
+                                state.hostPlayerId = cleanup.elect_host(state.players)
                                 host_changed = True
                         else:
                             player = next(
@@ -1044,16 +1052,11 @@ async def events(room_id: str, request: Request):
                             if player is not None:
                                 player.connectionStatus = "disconnected"
                                 player.disconnectedAt = dao.now_ms()
-                            if state.hostPlayerId == player_id:
-                                connected = [
-                                    p
-                                    for p in state.players
-                                    if p.connectionStatus == "connected"
-                                ]
-                                connected.sort(key=lambda p: p.sortOrder)
-                                state.hostPlayerId = (
-                                    connected[0].id if connected else None
-                                )
+                            if state.hostPlayerId == player_id or (
+                                state.hostPlayerId is not None
+                                and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+                            ):
+                                state.hostPlayerId = cleanup.elect_host(state.players)
                                 host_changed = True
                         await dao.save_room_state(room_id, state)
                         await broadcast.broadcast(

@@ -55,7 +55,7 @@ export const useGameStore = defineStore('game', () => {
 
   const isHost = computed(() => {
     if (!myPlayerId.value || !gameState.value) return false
-    return gameState.value.hostPlayerId === myPlayerId.value
+    return gameState.value.hostPlayerId === myPlayerId.value && !myPlayer.value?.isCpu
   })
 
   const hasPassword = computed(() => {
@@ -254,7 +254,9 @@ export const useGameStore = defineStore('game', () => {
       const res = await api.joinRoom(targetRoomId, name, effectivePassword)
       roomId.value = targetRoomId
       myPlayerId.value = res.playerId
-      applyGameState(res.gameState)
+      if (res.gameState) {
+        applyGameState(res.gameState)
+      }
       connectSse(targetRoomId)
     } catch (err) {
       if (err instanceof api.ApiError) {

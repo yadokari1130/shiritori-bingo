@@ -4,19 +4,27 @@ import asyncio
 import logging
 
 from app import broadcast, dao, db, engine
-from app.models import GameState
+from app.models import GameState, Player
 
 logger = logging.getLogger(__name__)
+
+
+def elect_host(players: list[Player]) -> str | None:
+    """接続中の人間プレイヤーのうち、参加登録順(sortOrder)で先頭のプレイヤーIDを返す。"""
+    connected = [p for p in players if p.connectionStatus == "connected" and not p.isCpu]
+    connected.sort(key=lambda p: p.sortOrder)
+    return connected[0].id if connected else None
 
 
 def remove_player_from_state(state: GameState, player_id: str) -> bool:
     """プレイヤーを状態から削除し、ホストが変わったかを返す。"""
     before_host = state.hostPlayerId
     state.players = [p for p in state.players if p.id != player_id]
-    if state.hostPlayerId == player_id:
-        connected = [p for p in state.players if p.connectionStatus == "connected"]
-        connected.sort(key=lambda p: p.sortOrder)
-        state.hostPlayerId = connected[0].id if connected else None
+    if state.hostPlayerId == player_id or (
+        state.hostPlayerId is not None
+        and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+    ):
+        state.hostPlayerId = elect_host(state.players)
     # チームのメンバー一覧を再計算
     for team in state.teams:
         team.memberPlayerIds = [
@@ -52,12 +60,11 @@ async def _cleanup_once() -> None:
                     team.memberPlayerIds = [
                         p.id for p in state.players if p.teamId == team.id
                     ]
-                if state.hostPlayerId == player_id:
-                    connected = [
-                        p for p in state.players if p.connectionStatus == "connected"
-                    ]
-                    connected.sort(key=lambda p: p.sortOrder)
-                    state.hostPlayerId = connected[0].id if connected else None
+                if state.hostPlayerId == player_id or (
+                    state.hostPlayerId is not None
+                    and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+                ):
+                    state.hostPlayerId = elect_host(state.players)
                     host_changed = True
             else:
                 player = next((p for p in state.players if p.id == player_id), None)
@@ -65,12 +72,11 @@ async def _cleanup_once() -> None:
                     continue
                 player.connectionStatus = "disconnected"
                 player.disconnectedAt = now
-                if state.hostPlayerId == player_id:
-                    connected = [
-                        p for p in state.players if p.connectionStatus == "connected"
-                    ]
-                    connected.sort(key=lambda p: p.sortOrder)
-                    state.hostPlayerId = connected[0].id if connected else None
+                if state.hostPlayerId == player_id or (
+                    state.hostPlayerId is not None
+                    and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+                ):
+                    state.hostPlayerId = elect_host(state.players)
                     host_changed = True
             await dao.save_room_state(room_id, state)
             await broadcast.broadcast(

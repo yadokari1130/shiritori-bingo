@@ -157,4 +157,27 @@ describe('gameStore CPU・補助モード連携', () => {
     expect(api.fetchWordSuggestions).toHaveBeenCalledWith('room-1')
     expect(store.wordSuggestions).toEqual(['りんご', 'りす', 'りぼん'])
   })
+
+  it('isHost: CPUプレイヤーはisHostがfalseになる', () => {
+    const store = useGameStore()
+    const state = createBaseGameState()
+    state.players.push({
+      id: 'cpu-1',
+      name: 'CPU 1',
+      teamId: null,
+      status: null,
+      connectionStatus: 'connected',
+      disconnectedAt: null,
+      card: null,
+      bingoLineIds: null,
+      openedCellCount: null,
+      isCpu: true,
+    })
+    // 万が一 hostPlayerId が CPU に設定されていても、myPlayerId が cpu-1 の場合は isHost は false
+    state.hostPlayerId = 'cpu-1'
+    store.myPlayerId = 'cpu-1'
+    store.applyGameState(state)
+
+    expect(store.isHost).toBe(false)
+  })
 })

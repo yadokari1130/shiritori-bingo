@@ -290,7 +290,7 @@ async function onDissolveRoom(): Promise<void> {
                   </div>
                   <div class="player-right">
                     <div class="player-badges">
-                      <span v-if="player.id === store.gameState?.hostPlayerId" class="status-badge">
+                      <span v-if="player.id === store.gameState?.hostPlayerId && !player.isCpu" class="status-badge">
                         親（ホスト）
                       </span>
                     </div>

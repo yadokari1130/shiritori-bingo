@@ -189,7 +189,7 @@ export interface CreateRoomResponse {
 export interface JoinRoomResponse {
   playerId: string
   isHost: boolean
-  gameState?: GameState
+  gameState: GameState
 }
 
 /** 汎用 GameState レスポンス */

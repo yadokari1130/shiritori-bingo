@@ -158,3 +158,89 @@ async def test_run_cpu_turn_execution():
     # 単語履歴またはスキップにより手番が進んでいること
     assert new_state.orderIndex != 0 or new_state.round > 1 or new_state.currentPlayerId != "p_cpu"
     assert len(new_state.wordHistory) > 0 or len(new_state.undoHistory) > 0
+
+
+def test_cpu_never_becomes_host_on_leave():
+    """ホストが退出した際、CPUではなく次の人間プレイヤーが親になり、人間がいない場合はNoneになることを確認。"""
+    settings = Settings(cardSize=3)
+    with TestClient(app) as host, TestClient(app) as guest:
+        res = host.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+
+        r_host = host.post(f"/api/rooms/{room_id}/join", json={"name": "HostPlayer"})
+        host_pid = r_host.json()["playerId"]
+
+        # CPUを追加（参加順: HostPlayer -> CPU 1）
+        r_cpu = host.post(f"/api/rooms/{room_id}/cpu")
+        cpu_pid = next(p["id"] for p in r_cpu.json()["gameState"]["players"] if p.get("isCpu"))
+
+        # 人間ゲストが参加（参加順: HostPlayer -> CPU 1 -> GuestPlayer）
+        r_guest = guest.post(f"/api/rooms/{room_id}/join", json={"name": "GuestPlayer"})
+        guest_pid = r_guest.json()["playerId"]
+
+        # ホスト（HostPlayer）が退出 -> CPU 1ではなくGuestPlayerがホストになること
+        r_leave = host.post(f"/api/rooms/{room_id}/leave")
+        assert r_leave.status_code == 200
+
+        state = asyncio.run(dao.load_room_state(room_id))
+        assert state is not None
+        assert state.hostPlayerId == guest_pid
+        assert state.hostPlayerId != cpu_pid
+
+        # 唯一の人間であるGuestPlayerも退出 -> ホストはNoneになり、CPUがホストにならないこと
+        r_guest_leave = guest.post(f"/api/rooms/{room_id}/leave")
+        assert r_guest_leave.status_code == 200
+
+        state2 = asyncio.run(dao.load_room_state(room_id))
+        assert state2 is not None
+        assert state2.hostPlayerId is None
+
+
+def test_change_host_to_cpu_forbidden():
+    """親変更APIでCPUプレイヤーを指定した場合に400エラーで拒絶されることを確認。"""
+    settings = Settings(cardSize=3)
+    with TestClient(app) as host, TestClient(app) as guest:
+        res = host.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+
+        host.post(f"/api/rooms/{room_id}/join", json={"name": "HostPlayer"})
+        guest.post(f"/api/rooms/{room_id}/join", json={"name": "GuestPlayer"})
+
+        r_cpu = host.post(f"/api/rooms/{room_id}/cpu")
+        cpu_pid = next(p["id"] for p in r_cpu.json()["gameState"]["players"] if p.get("isCpu"))
+
+        # CPUを指定して親変更を試みる -> 400
+        r_fail = host.post(f"/api/rooms/{room_id}/host", json={"playerId": cpu_pid})
+        assert r_fail.status_code == 400
+        assert "CPU" in r_fail.json()["detail"]
+
+
+def test_return_to_lobby_cpu_never_becomes_host():
+    """ロビーに戻る際、CPUが親に選出されないことを確認。"""
+    settings = Settings(cardSize=3)
+    with TestClient(app) as host:
+        res = host.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+
+        r_host = host.post(f"/api/rooms/{room_id}/join", json={"name": "HostPlayer"})
+        host_pid = r_host.json()["playerId"]
+
+        # CPU追加して開始
+        host.post(f"/api/rooms/{room_id}/cpu")
+        host.post(f"/api/rooms/{room_id}/start")
+
+        # 状態を強制的にresultに変更
+        async def set_result_phase():
+            st = await dao.load_room_state(room_id)
+            assert st is not None
+            st.phase = "result"
+            await dao.save_room_state(room_id, st)
+
+        asyncio.run(set_result_phase())
+
+        # ロビーに戻る
+        r_lobby = host.post(f"/api/rooms/{room_id}/lobby")
+        assert r_lobby.status_code == 200
+        gs = r_lobby.json()["gameState"]
+        assert gs["hostPlayerId"] == host_pid
+        assert not any(p["id"] == gs["hostPlayerId"] and p.get("isCpu") for p in gs["players"])
