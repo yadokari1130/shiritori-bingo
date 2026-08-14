@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import ResultView from './ResultView.vue'
 import { useGameStore } from '../store/game'
@@ -26,6 +26,7 @@ describe('ResultView', () => {
     store.gameState = {
       phase: 'result',
       settings,
+      hasPassword: false,
       hostPlayerId: 'host',
       freeChar: 'あ',
       players: [],
@@ -149,4 +150,23 @@ describe('ResultView', () => {
     expect(cells[3].text()).toBe('っ')
     expect(cells[4].text()).toBe('ー')
   })
+
+  it('ヘッダーおよび最下部に「トップに戻る」ボタンが表示され、クリック時に leaveAndGoToTop が実行される', async () => {
+    const { wrapper, store } = factory()
+    const leaveSpy = vi.spyOn(store, 'leaveAndGoToTop').mockResolvedValue()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    // ヘッダーとフッターにトップに戻るボタンが存在することを確認
+    const topButtons = wrapper.findAll('button').filter((btn) => btn.text().includes('トップに戻る'))
+    expect(topButtons.length).toBe(2)
+
+    // ヘッダーのボタンをクリック
+    await topButtons[0].trigger('click')
+    expect(leaveSpy).toHaveBeenCalledTimes(1)
+
+    // 最下部のアクションボタンをクリック
+    await topButtons[1].trigger('click')
+    expect(leaveSpy).toHaveBeenCalledTimes(2)
+  })
 })
+

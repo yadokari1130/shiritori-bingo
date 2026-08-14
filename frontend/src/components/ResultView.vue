@@ -35,31 +35,35 @@ const settings = computed(() => snapshot.value?.settings ?? store.gameState?.set
 const orderedResults = computed(() => {
   if (!snapshot.value) return []
   if (snapshot.value.settings.mode === 'individual') {
-    return snapshot.value.players.map((p) => ({
-      id: p.playerId,
-      title: p.isCpu ? `🤖 ${p.name}` : p.name,
-      subtitle: p.teamId ? 'チーム所属' : undefined,
-      members: [],
-      disconnected: p.connectionStatus === 'disconnected',
-      card: p.card,
-      disqualified: p.status === 'disqualified',
-    }))
+    return snapshot.value.players
+      .filter((p): p is typeof p & { card: NonNullable<typeof p.card> } => Boolean(p.card))
+      .map((p) => ({
+        id: p.playerId,
+        title: p.isCpu ? `🤖 ${p.name}` : p.name,
+        subtitle: p.teamId ? 'チーム所属' : undefined,
+        members: [],
+        disconnected: p.connectionStatus === 'disconnected',
+        card: p.card,
+        disqualified: p.status === 'disqualified',
+      }))
   }
-  return snapshot.value.teams.map((t, idx) => ({
-    id: t.teamId,
-    title: `チーム ${idx + 1}`,
-    subtitle: undefined,
-    disconnected: false,
-    members: t.memberPlayerIds
-      .map((id) => snapshot.value!.players.find((p) => p.playerId === id))
-      .filter((player): player is NonNullable<typeof player> => Boolean(player))
-      .map((player) => ({
-        name: player.isCpu ? `🤖 ${player.name}` : player.name,
-        disconnected: player.connectionStatus === 'disconnected',
-      })),
-    card: t.card,
-    disqualified: t.status === 'disqualified',
-  }))
+  return snapshot.value.teams
+    .filter((t): t is typeof t & { card: NonNullable<typeof t.card> } => Boolean(t.card))
+    .map((t, idx) => ({
+      id: t.teamId,
+      title: `チーム ${idx + 1}`,
+      subtitle: undefined,
+      disconnected: false,
+      members: t.memberPlayerIds
+        .map((id) => snapshot.value!.players.find((p) => p.playerId === id))
+        .filter((player): player is NonNullable<typeof player> => Boolean(player))
+        .map((player) => ({
+          name: player.isCpu ? `🤖 ${player.name}` : player.name,
+          disconnected: player.connectionStatus === 'disconnected',
+        })),
+      card: t.card,
+      disqualified: t.status === 'disqualified',
+    }))
 })
 
 const charColumns = computed(() => {
@@ -90,6 +94,15 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
 async function onReturnToLobby(): Promise<void> {
   await store.returnToLobby()
 }
+
+async function onGoToTop(): Promise<void> {
+  if (store.myPlayer) {
+    if (!confirm('トップ画面へ戻りますか？')) {
+      return
+    }
+  }
+  await store.leaveAndGoToTop()
+}
 </script>
 
 <template>
@@ -100,7 +113,16 @@ async function onReturnToLobby(): Promise<void> {
         <h1>しりとりビンゴ 結果発表</h1>
         <p>対戦結果と各プレイヤーのビンゴ達成状況を確認します。</p>
       </div>
-      <div class="header-mark">結果</div>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="secondary-button header-btn"
+          @click="onGoToTop"
+        >
+          トップに戻る
+        </button>
+        <div class="header-mark">結果</div>
+      </div>
     </header>
 
     <!-- エラー・通知表示 -->
@@ -291,14 +313,22 @@ async function onReturnToLobby(): Promise<void> {
       </div>
     </section>
 
-    <!-- 親用：ロビーへ戻るボタン -->
-    <div v-if="store.isHost" class="result-actions">
+    <!-- アクションボタン -->
+    <div class="result-actions">
       <button
+        v-if="store.isHost"
         type="button"
         class="primary-button btn-lg"
         @click="onReturnToLobby"
       >
         ロビーに戻る（親のみ）
+      </button>
+      <button
+        type="button"
+        class="secondary-button btn-lg"
+        @click="onGoToTop"
+      >
+        トップに戻る
       </button>
     </div>
   </div>
@@ -526,13 +556,25 @@ async function onReturnToLobby(): Promise<void> {
   font-size: 0.7rem;
 }
 
-.opened-chars-tag {
-  color: #15803d;
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-btn {
+  padding: 8px 16px;
+  font-size: 0.9rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .result-actions {
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
   margin-top: 2rem;
 }
 </style>
