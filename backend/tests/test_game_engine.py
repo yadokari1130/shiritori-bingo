@@ -116,6 +116,21 @@ def test_process_word_valid_and_advance():
     assert state.currentPlayerId != first
 
 
+def test_process_first_word_dakuten_allowed():
+    settings = Settings(cardSize=3)
+    state = GameState(phase="setup", settings=settings)
+    state.players = [
+        Player(id="p1", name="p1", status="active"),
+        Player(id="p2", name="p2", status="active"),
+    ]
+    engine.start_game(state, now_ms())
+    state.freeChar = "は"
+    first = state.currentPlayerId
+    engine.process_word(state, first, "ぱんだ", now_ms())
+    assert len(state.wordHistory) == 1
+    assert state.usedWords == ["ぱんだ"]
+
+
 def test_next_round_preserves_play_order():
     settings = Settings(cardSize=3)
     state = GameState(phase="setup", settings=settings)
@@ -149,7 +164,7 @@ def test_process_word_invalid_skip():
     ]
     engine.start_game(state, now_ms())
     first = state.currentPlayerId
-    engine.process_word(state, first, "ず" + "い", now_ms())
+    engine.process_word(state, first, "きりん", now_ms())
     assert len(state.wordHistory) == 0
     assert state.currentPlayerId != first
 
@@ -163,7 +178,7 @@ def test_process_word_invalid_disqualify():
     ]
     engine.start_game(state, now_ms())
     first = state.currentPlayerId
-    engine.process_word(state, first, "ず" + "い", now_ms())
+    engine.process_word(state, first, "きりん", now_ms())
     player = next(p for p in state.players if p.id == first)
     assert player.status == "disqualified"
 
@@ -211,9 +226,9 @@ def test_disqualify_all_ends_game():
     ]
     engine.start_game(state, now_ms())
     first = state.currentPlayerId
-    engine.process_word(state, first, "ず" + "い", now_ms())
+    engine.process_word(state, first, "きりん", now_ms())
     second = state.currentPlayerId
-    engine.process_word(state, second, "ず" + "い", now_ms())
+    engine.process_word(state, second, "きりん", now_ms())
     assert state.phase == "result"
     assert state.result is not None
     assert state.result.reason == "all_disqualified"

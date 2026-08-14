@@ -73,7 +73,8 @@ export function usePresets() {
       createdAt: now,
       updatedAt: now,
     }
-    presets.value.push(preset)
+    // 一覧表示へ確実に変更を通知するため、配列を再代入する。
+    presets.value = [...presets.value, preset]
     savePresets()
     return preset
   }

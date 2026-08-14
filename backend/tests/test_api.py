@@ -1,6 +1,6 @@
-import asyncio
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -11,10 +11,21 @@ from app.models import CardOptions, Settings
 
 @pytest.fixture(autouse=True)
 def reset_db(tmp_path: Path):
-    asyncio.run(db.close_db())
     db.DB_PATH = tmp_path / "test.db"
     yield
-    asyncio.run(db.close_db())
+
+
+def make_clients(base_client: TestClient, count: int = 1):
+    """単一のTestClientトランスポート（同一イベントループ）を共有する独立クライアントを生成する。"""
+    clients = [
+        httpx.Client(
+            transport=base_client._transport,
+            base_url=str(base_client.base_url),
+            follow_redirects=True,
+        )
+        for _ in range(count)
+    ]
+    return clients[0] if count == 1 else tuple(clients)
 
 
 def test_create_room():
@@ -29,7 +40,8 @@ def test_create_room():
 
 def test_join_and_start():
     settings = Settings(cardSize=3)
-    with TestClient(app) as creator, TestClient(app) as joiner:
+    with TestClient(app) as base:
+        creator, joiner = make_clients(base, 2)
         res = creator.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
 
@@ -74,7 +86,8 @@ def test_reconnect_by_cookie_without_name():
 
 def test_invalid_word_skips_turn():
     settings = Settings(cardSize=3, invalidAction="skip")
-    with TestClient(app) as creator, TestClient(app) as joiner:
+    with TestClient(app) as base:
+        creator, joiner = make_clients(base, 2)
         res = creator.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
         r1 = creator.post(f"/api/rooms/{room_id}/join", json={"name": "A"})
@@ -95,10 +108,10 @@ def test_invalid_word_skips_turn():
         assert data["currentPlayerId"] != current
 
 
-
 def test_host_only_start():
     settings = Settings(cardSize=3)
-    with TestClient(app) as creator, TestClient(app) as joiner:
+    with TestClient(app) as base:
+        creator, joiner = make_clients(base, 2)
         res = creator.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
         creator.post(f"/api/rooms/{room_id}/join", json={"name": "A"})
@@ -139,7 +152,8 @@ def test_settings_update():
 
 def test_leave_room():
     settings = Settings(cardSize=3)
-    with TestClient(app) as creator, TestClient(app) as joiner:
+    with TestClient(app) as base:
+        creator, joiner = make_clients(base, 2)
         res = creator.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
         creator.post(f"/api/rooms/{room_id}/join", json={"name": "A"})
@@ -152,7 +166,8 @@ def test_leave_room():
 
 def test_change_host():
     settings = Settings(cardSize=3)
-    with TestClient(app) as creator, TestClient(app) as joiner:
+    with TestClient(app) as base:
+        creator, joiner = make_clients(base, 2)
         res = creator.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
         creator.post(f"/api/rooms/{room_id}/join", json={"name": "A"})
@@ -171,7 +186,8 @@ def test_change_host():
 
 def test_kick_player():
     settings = Settings(cardSize=3)
-    with TestClient(app) as creator, TestClient(app) as joiner:
+    with TestClient(app) as base:
+        creator, joiner = make_clients(base, 2)
         res = creator.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
         r1 = creator.post(f"/api/rooms/{room_id}/join", json={"name": "A"})
@@ -196,7 +212,8 @@ def test_kick_player():
 
 def test_undo():
     settings = Settings(cardSize=3)
-    with TestClient(app) as creator, TestClient(app) as joiner:
+    with TestClient(app) as base:
+        creator, joiner = make_clients(base, 2)
         res = creator.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
         r1 = creator.post(f"/api/rooms/{room_id}/join", json={"name": "A"})
@@ -227,7 +244,8 @@ def test_team_mode():
         teamCount=2,
         cardOptions=CardOptions(dakuten=True),
     )
-    with TestClient(app) as creator, TestClient(app) as joiner:
+    with TestClient(app) as base:
+        creator, joiner = make_clients(base, 2)
         res = creator.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
         r1 = creator.post(f"/api/rooms/{room_id}/join", json={"name": "A"})
@@ -262,7 +280,8 @@ def test_team_mode():
 def test_reconnect_without_name():
     """Cookie がある場合、名前入力なし（空文字またはNone）で再接続できる。"""
     settings = Settings(cardSize=3)
-    with TestClient(app) as client:
+    with TestClient(app) as base:
+        client, new_client = make_clients(base, 2)
         res = client.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
         # 初回参加でCookie発行
@@ -276,11 +295,10 @@ def test_reconnect_without_name():
         assert reconnect.json()["playerId"] == pid1
 
         # 新規クライアント（Cookieなし）：名前が空なら400エラー
-        with TestClient(app) as new_client:
-            fail_join = new_client.post(
-                f"/api/rooms/{room_id}/join", json={"name": ""}
-            )
-            assert fail_join.status_code == 400
+        fail_join = new_client.post(
+            f"/api/rooms/{room_id}/join", json={"name": ""}
+        )
+        assert fail_join.status_code == 400
 
 
 def test_team_leave_and_rejoin():
@@ -339,7 +357,8 @@ def test_team_leave_and_rejoin():
 
 def test_delete_room_by_host():
     settings = Settings(cardSize=3)
-    with TestClient(app) as host, TestClient(app) as guest:
+    with TestClient(app) as base:
+        host, guest = make_clients(base, 2)
         res = host.post("/api/rooms", json={"settings": settings.model_dump()})
         assert res.status_code == 200
         room_id = res.json()["roomId"]
@@ -363,7 +382,8 @@ def test_delete_room_by_host():
 
 def test_delete_room_by_non_host_forbidden():
     settings = Settings(cardSize=3)
-    with TestClient(app) as host, TestClient(app) as guest:
+    with TestClient(app) as base:
+        host, guest = make_clients(base, 2)
         res = host.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
 
@@ -418,7 +438,8 @@ def test_cookie_secure_and_samesite_attributes(monkeypatch):
 
 def test_join_during_playing_or_result():
     settings = Settings(cardSize=3)
-    with TestClient(app) as creator, TestClient(app) as joiner, TestClient(app) as late_comer:
+    with TestClient(app) as base:
+        creator, joiner, late_comer = make_clients(base, 3)
         res = creator.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
         creator.post(f"/api/rooms/{room_id}/join", json={"name": "A"})
@@ -434,7 +455,8 @@ def test_join_during_playing_or_result():
 
 def test_room_with_password():
     settings = Settings(cardSize=3)
-    with TestClient(app) as creator, TestClient(app) as joiner1, TestClient(app) as joiner2:
+    with TestClient(app) as base:
+        creator, joiner1, joiner2 = make_clients(base, 3)
         # パスワード付きルームを作成
         res = creator.post(
             "/api/rooms",
@@ -486,7 +508,8 @@ def test_room_with_password():
 
 def test_room_without_password():
     settings = Settings(cardSize=3)
-    with TestClient(app) as creator, TestClient(app) as joiner:
+    with TestClient(app) as base:
+        creator, joiner = make_clients(base, 2)
         # パスワードなしでルーム作成
         res = creator.post(
             "/api/rooms",
@@ -507,7 +530,8 @@ def test_room_without_password():
 
 def test_creator_late_join_takes_host():
     settings = Settings(cardSize=3)
-    with TestClient(app) as creator, TestClient(app) as joiner:
+    with TestClient(app) as base:
+        creator, joiner = make_clients(base, 2)
         # 作成者がルームを作成
         res = creator.post(
             "/api/rooms",
@@ -533,7 +557,8 @@ def test_creator_late_join_takes_host():
 
 def test_lobby_disconnect_removes_player_and_allows_reconnect_without_name():
     settings = Settings(cardSize=3)
-    with TestClient(app) as host_client, TestClient(app) as joiner_client:
+    with TestClient(app) as base:
+        host_client, joiner_client = make_clients(base, 2)
         res = host_client.post(
             "/api/rooms", json={"settings": settings.model_dump()}
         )
@@ -546,14 +571,12 @@ def test_lobby_disconnect_removes_player_and_allows_reconnect_without_name():
         assert r2.status_code == 200
         joiner_pid = r2.json()["playerId"]
 
-        # 参加者がSSEに接続し、切断する（タブを閉じる動作をシミュレート）
-        with joiner_client.stream("GET", f"/api/rooms/{room_id}/events") as sse_stream:
-            # 接続中の状態を確認
-            pass
+        # 参加者が切断通知を送信（タブを閉じる動作をシミュレート）
+        dc_res = joiner_client.post(f"/api/rooms/{room_id}/disconnect")
+        assert dc_res.status_code == 200
 
-        # SSEストリームを抜けたので切断された状態
         # ホスト視点でゲーム状態を確認
-        state = asyncio.run(dao.load_room_state(room_id))
+        state = base.portal.call(dao.load_room_state, room_id)
         assert state is not None
         # ロビー（setup）のため、切断された参加者はプレイヤー一覧から即座に削除されている
         player_ids = [p.id for p in state.players]
@@ -588,9 +611,10 @@ def test_lobby_disconnect_removes_player_and_allows_reconnect_without_name():
 
 
 def test_playing_disconnect_and_reconnect():
-    """対戦中にSSE切断された場合、connectionStatusがdisconnectedになり、再接続で復帰する。"""
-    with TestClient(app) as host_client, TestClient(app) as joiner_client:
-        settings = Settings(cardSize=3, mode="individual")
+    """対戦中に切断された場合、connectionStatusがdisconnectedになり、再接続で復帰する。"""
+    settings = Settings(cardSize=3, mode="individual")
+    with TestClient(app) as base:
+        host_client, joiner_client = make_clients(base, 2)
         res = host_client.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
 
@@ -606,12 +630,12 @@ def test_playing_disconnect_and_reconnect():
         assert start_res.status_code == 200
         assert start_res.json()["gameState"]["phase"] == "playing"
 
-        # 参加者がSSEに接続し、切断する
-        with joiner_client.stream("GET", f"/api/rooms/{room_id}/events") as _:
-            pass
+        # 参加者が切断通知を送信
+        dc_res = joiner_client.post(f"/api/rooms/{room_id}/disconnect")
+        assert dc_res.status_code == 200
 
         # 切断後：対戦中のためプレイヤーは削除されず、connectionStatusがdisconnectedになる
-        state = asyncio.run(dao.load_room_state(room_id))
+        state = base.portal.call(dao.load_room_state, room_id)
         assert state is not None
         assert len(state.players) == 2
         p2 = next(p for p in state.players if p.id == joiner_pid)
@@ -623,7 +647,7 @@ def test_playing_disconnect_and_reconnect():
             f"/api/rooms/{room_id}/join", json={"name": ""}
         )
         assert reconnect_res.status_code == 200
-        state2 = asyncio.run(dao.load_room_state(room_id))
+        state2 = base.portal.call(dao.load_room_state, room_id)
         assert state2 is not None
         p2_reconnected = next(p for p in state2.players if p.id == joiner_pid)
         assert p2_reconnected.connectionStatus == "connected"
@@ -632,8 +656,9 @@ def test_playing_disconnect_and_reconnect():
 
 def test_notify_disconnect_endpoint():
     """POST /api/rooms/{room_id}/disconnect による即時切断通知の検証。"""
-    with TestClient(app) as host_client, TestClient(app) as joiner_client:
-        settings = Settings(cardSize=3, mode="individual")
+    settings = Settings(cardSize=3, mode="individual")
+    with TestClient(app) as base:
+        host_client, joiner_client = make_clients(base, 2)
         res = host_client.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
 
@@ -645,7 +670,7 @@ def test_notify_disconnect_endpoint():
         # ロビー時に切断通知を送信 -> プレイヤーがロビーから即時除外される
         dc_res = joiner_client.post(f"/api/rooms/{room_id}/disconnect")
         assert dc_res.status_code == 200
-        state = asyncio.run(dao.load_room_state(room_id))
+        state = base.portal.call(dao.load_room_state, room_id)
         assert state is not None
         assert joiner_pid not in [p.id for p in state.players]
 
@@ -657,7 +682,7 @@ def test_notify_disconnect_endpoint():
         # 対戦中に切断通知を送信 -> connectionStatusがdisconnectedになる
         dc_res2 = joiner_client.post(f"/api/rooms/{room_id}/disconnect")
         assert dc_res2.status_code == 200
-        state2 = asyncio.run(dao.load_room_state(room_id))
+        state2 = base.portal.call(dao.load_room_state, room_id)
         assert state2 is not None
         p2 = next(p for p in state2.players if p.id == joiner_pid)
         assert p2.connectionStatus == "disconnected"
@@ -665,8 +690,9 @@ def test_notify_disconnect_endpoint():
 
 def test_result_disconnect_and_return_to_lobby_removes_disconnected_player():
     """リザルト画面で切断したプレイヤーが、ロビーに戻った際にプレイヤー一覧から削除されることを検証する。"""
-    with TestClient(app) as host_client, TestClient(app) as joiner_client:
-        settings = Settings(cardSize=3, mode="individual", targetTurns=1, endCondition="turns")
+    settings = Settings(cardSize=3, mode="individual", targetTurns=1, endCondition="turns")
+    with TestClient(app) as base:
+        host_client, joiner_client = make_clients(base, 2)
         res = host_client.post("/api/rooms", json={"settings": settings.model_dump()})
         room_id = res.json()["roomId"]
 
@@ -683,7 +709,7 @@ def test_result_disconnect_and_return_to_lobby_removes_disconnected_player():
         assert start_res.status_code == 200
 
         # 1ターンで終了させるため、2手番スキップまたは単語入力を行う
-        state = asyncio.run(dao.load_room_state(room_id))
+        state = base.portal.call(dao.load_room_state, room_id)
         assert state is not None
         # 1人目スキップ
         s1 = host_client.post(
@@ -691,7 +717,7 @@ def test_result_disconnect_and_return_to_lobby_removes_disconnected_player():
             json={"type": "skip", "subjectId": state.currentPlayerId},
         )
         assert s1.status_code == 200
-        state = asyncio.run(dao.load_room_state(room_id))
+        state = base.portal.call(dao.load_room_state, room_id)
         # 2人目スキップ
         s2 = host_client.post(
             f"/api/rooms/{room_id}/action",
@@ -700,7 +726,7 @@ def test_result_disconnect_and_return_to_lobby_removes_disconnected_player():
         assert s2.status_code == 200
 
         # リザルト画面に遷移していることを確認
-        state = asyncio.run(dao.load_room_state(room_id))
+        state = base.portal.call(dao.load_room_state, room_id)
         assert state is not None
         assert state.phase == "result"
         assert len(state.players) == 2
@@ -710,7 +736,7 @@ def test_result_disconnect_and_return_to_lobby_removes_disconnected_player():
         assert dc_res.status_code == 200
 
         # リザルト画面ではプレイヤー一覧に切断状態で残っている（結果表示のため）
-        state_in_result = asyncio.run(dao.load_room_state(room_id))
+        state_in_result = base.portal.call(dao.load_room_state, room_id)
         assert state_in_result is not None
         assert state_in_result.phase == "result"
         assert len(state_in_result.players) == 2
@@ -728,7 +754,7 @@ def test_result_disconnect_and_return_to_lobby_removes_disconnected_player():
         assert lobby_gs["players"][0]["id"] == host_pid
 
         # DB上の状態も確認
-        state_in_lobby = asyncio.run(dao.load_room_state(room_id))
+        state_in_lobby = base.portal.call(dao.load_room_state, room_id)
         assert state_in_lobby is not None
         assert state_in_lobby.phase == "setup"
         assert len(state_in_lobby.players) == 1
@@ -749,7 +775,8 @@ def test_result_disconnect_and_return_to_lobby_removes_disconnected_player():
 def test_input_word_check_setting_and_invalid_word_action():
     """inputWordCheck設定の反映と、無効単語送信時のバックエンドでのスキップ・失格判定テスト"""
     settings = Settings(cardSize=3, invalidAction="skip", inputWordCheck=False)
-    with TestClient(app) as host_client, TestClient(app) as joiner_client:
+    with TestClient(app) as base:
+        host_client, joiner_client = make_clients(base, 2)
         res = host_client.post("/api/rooms", json={"settings": settings.model_dump()})
         assert res.status_code == 200
         room_id = res.json()["roomId"]
@@ -795,11 +822,11 @@ def test_input_word_check_setting_and_invalid_word_action():
         assert after_state["currentPlayerId"] == other_pid
 
 
-
 def test_start_game_with_updated_settings():
     """設定反映ボタンを押さずに、ゲーム開始リクエストに新しい設定を渡した場合に設定が反映されてゲームが開始されることのテスト"""
     init_settings = Settings(cardSize=5, timeLimitSeconds=30, minWordLength=None)
-    with TestClient(app) as host_client, TestClient(app) as joiner_client:
+    with TestClient(app) as base:
+        host_client, joiner_client = make_clients(base, 2)
         res = host_client.post("/api/rooms", json={"settings": init_settings.model_dump()})
         assert res.status_code == 200
         room_id = res.json()["roomId"]
@@ -826,11 +853,3 @@ def test_start_game_with_updated_settings():
         for p in state["players"]:
             assert p["card"]["size"] == 3
             assert len(p["card"]["cells"]) == 9
-
-
-
-
-
-
-
-
