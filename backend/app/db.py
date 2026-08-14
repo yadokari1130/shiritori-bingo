@@ -27,6 +27,8 @@ def _run_migrations() -> None:
 
 async def init_db() -> None:
     """Aerichでスキーマを適用してからTortoiseを初期化する。"""
+    global _write_lock
+    _write_lock = asyncio.Lock()
     _run_migrations()
     await Tortoise.init(config=get_tortoise_config(DB_PATH))
     await dao.reset_connection_statuses()

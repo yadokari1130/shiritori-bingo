@@ -269,7 +269,7 @@ def get_word_invalid_reason(state: GameState, word: str) -> str | None:
     if word in state.usedWords:
         return "この単語はすでに使われています。"
     if not state.wordHistory:
-        if word[0] != state.freeChar:
+        if not is_connected(state.freeChar, word[0]):
             return "前の単語の最後の文字から始まっていません。"
     else:
         last_word = state.wordHistory[-1].word
@@ -717,7 +717,7 @@ def process_word(state: GameState, player_id: str, word: str, now_ms: int) -> Ga
     if not is_valid_word_length(word, state.settings) or word in state.usedWords:
         invalid = True
     elif not state.wordHistory:
-        if word[0] != state.freeChar:
+        if not is_connected(state.freeChar, word[0]):
             invalid = True
     else:
         last_word = state.wordHistory[-1].word

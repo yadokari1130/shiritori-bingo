@@ -151,59 +151,67 @@ function hasNormalCharBefore(tail: string, endIndex: number): boolean {
  * 仕様 4.3.3
  */
 export function normalizeTail(tail: string): string[] {
-  if (tail.length === 0) return []
+  const normalized = tail.normalize('NFC')
+  if (normalized.length === 0) return []
 
-  // 1. 語尾が「ん」なら無効（空配列を返す）
-  if (tail[tail.length - 1] === 'ん') return []
-
-  // 2. 末尾の伸ばし棒をスキップ
-  let i = tail.length - 1
-  while (i >= 0 && PROLONGED_CHARS.includes(tail[i])) {
+  // 末尾の伸ばし棒をスキップ
+  let i = normalized.length - 1
+  while (i >= 0 && PROLONGED_CHARS.includes(normalized[i])) {
     i--
   }
   if (i < 0) return [] // 「ーー」など
 
-  const ch = tail[i]
+  const ch = normalized[i]
 
-  // 3. 拗音 → 直音
+  // 1. 語尾が「ん」なら無効（「ん」「んー」など）
+  if (ch === 'ん') return []
+
+  // 2. 拗音 → 直音（グループ展開含む）
   if (YOON_CHARS.includes(ch)) {
-    if (!hasNormalCharBefore(tail, i)) return []
+    if (!hasNormalCharBefore(normalized, i)) return []
     const straight = YOON_TO_STRAIGHT[ch]
-    return straight ? [straight] : []
+    if (!straight) return []
+    const group = DAKUON_GROUP[straight]
+    return group ? [...group] : [straight]
   }
 
-  // 4. 促音 → つ
+  // 3. 促音 → つ（つ・づ グループ）
   if (SOKUON_CHARS.includes(ch)) {
-    if (!hasNormalCharBefore(tail, i)) return []
-    return ['つ']
+    if (!hasNormalCharBefore(normalized, i)) return []
+    const group = DAKUON_GROUP['つ']
+    return group ? [...group] : ['つ']
   }
 
-  // 5. 小さいあ行 → 直音
+  // 4. 小さいあ行 → 直音（グループ展開含む：例「ぅ」→「う・ゔ」）
   if (SMALL_A_CHARS.includes(ch)) {
-    if (!hasNormalCharBefore(tail, i)) return []
+    if (!hasNormalCharBefore(normalized, i)) return []
     const straight = SMALL_A_TO_STRAIGHT[ch]
-    return straight ? [straight] : []
+    if (!straight) return []
+    const group = DAKUON_GROUP[straight]
+    return group ? [...group] : [straight]
   }
 
-  // 6. 通常文字
+  // 5. 通常文字
   const group = DAKUON_GROUP[ch]
   return group ? [...group] : [ch]
 }
 
 /** 単語の最後の文字を取得する（空の場合は空文字） */
 export function getLastChar(word: string): string {
-  return word.length > 0 ? word[word.length - 1] : ''
+  const normalized = word.normalize('NFC')
+  return normalized.length > 0 ? normalized[normalized.length - 1] : ''
 }
 
 /** 入力文字列がひらがなと伸ばし棒のみか検証する。仕様 4.2, 7.4 */
 export function isValidInputChars(word: string): boolean {
-  if (word.length === 0) return false
-  return /^[\u3040-\u309fー]+$/.test(word)
+  const normalized = word.normalize('NFC')
+  if (normalized.length === 0) return false
+  return /^[\u3040-\u309fー]+$/.test(normalized)
 }
 
 /** 入力が空か検証する */
 export function isEmptyInput(word: string): boolean {
-  return word.trim().length === 0
+  return word.normalize('NFC').trim().length === 0
 }
 
 /** 語尾が「ん」か検証する */
@@ -216,14 +224,16 @@ export function validateConnection(
   word: string,
   requiredStartChar: string,
 ): { valid: boolean; reason?: string } {
-  if (word.length === 0) {
+  const trimmed = word.normalize('NFC').trim()
+  if (trimmed.length === 0) {
     return { valid: false, reason: '単語を入力してください。' }
   }
-  if (!isValidInputChars(word)) {
+  if (!isValidInputChars(trimmed)) {
     return { valid: false, reason: 'ひらがなと伸ばし棒で入力してください。' }
   }
-  const candidates = normalizeTail(requiredStartChar)
-  const first = word[0]
+  const normReq = requiredStartChar.normalize('NFC').trim()
+  const candidates = normalizeTail(normReq)
+  const first = trimmed[0]
   if (candidates.length === 0) {
     return { valid: false, reason: '前の単語の語尾が無効です。' }
   }
@@ -236,7 +246,7 @@ export function validateConnection(
 
 /** 入力文字列の基本形式（空文字、ひらがな・伸ばし棒以外）を検証する。常にフロントエンドで適用。 */
 export function validateBasicInputFormat(word: string): { valid: boolean; reason?: string } {
-  const trimmed = word.trim()
+  const trimmed = word.normalize('NFC').trim()
   if (trimmed.length === 0) {
     return { valid: false, reason: '単語を入力してください。' }
   }
@@ -257,8 +267,9 @@ export function validateWordRuleRequirements(
     maxWordLength?: number | null
   } = {},
 ): { valid: boolean; reason?: string } {
-  const trimmed = word.trim()
+  const trimmed = word.normalize('NFC').trim()
   const { requiredStartChar, isFirstWord = false, usedWords = [], minWordLength, maxWordLength } = options
+  const normReq = requiredStartChar ? requiredStartChar.normalize('NFC').trim() : ''
 
   // 文字数制限
   const len = trimmed.length
@@ -270,22 +281,17 @@ export function validateWordRuleRequirements(
   }
 
   // 既出単語
-  if (usedWords.includes(trimmed)) {
+  const normUsedWords = usedWords.map((w) => w.normalize('NFC').trim())
+  if (normUsedWords.includes(trimmed)) {
     return { valid: false, reason: 'この単語はすでに使われています。' }
   }
 
-  // しりとり接続
-  if (requiredStartChar && requiredStartChar.length > 0) {
-    if (isFirstWord) {
-      if (trimmed[0] !== requiredStartChar) {
-        return { valid: false, reason: `「${requiredStartChar}」から始めてください。` }
-      }
-    } else {
-      const candidates = normalizeTail(requiredStartChar)
-      const first = trimmed[0]
-      if (candidates.length === 0 || !candidates.some((c) => isSameConnectionGroup(c, first))) {
-        return { valid: false, reason: '前の単語の最後の文字から始まっていません。' }
-      }
+  // しりとり接続（初手・2手目以降ともに同一濁点グループで接続可能）
+  if (normReq && normReq.length > 0) {
+    const candidates = normalizeTail(normReq)
+    const first = trimmed[0]
+    if (candidates.length === 0 || !candidates.some((c) => isSameConnectionGroup(c, first))) {
+      return { valid: false, reason: '前の単語の最後の文字から始まっていません。' }
     }
   }
 

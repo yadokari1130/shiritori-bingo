@@ -239,7 +239,7 @@ describe('PlayingView タイマー・時間同期', () => {
     await wrapper.find('.word-form').trigger('submit')
 
     expect(submitSpy).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('「あ」から始めてください。')
+    expect(wrapper.text()).toContain('前の単語の最後の文字から始まっていません。')
   })
 
   it('inputWordCheck: false のとき、接続不一致な単語でも送信でき、空文字や非ひらがなのみ送信を防止する', async () => {

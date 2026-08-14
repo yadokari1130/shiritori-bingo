@@ -105,6 +105,9 @@ describe('shiritori ユーティリティ', () => {
 
     it('ん で終わる場合は空配列', () => {
       expect(normalizeTail('きりん')).toEqual([])
+      expect(normalizeTail('んー')).toEqual([])
+      expect(normalizeTail('らーめんー')).toEqual([])
+      expect(normalizeTail('うどんーー')).toEqual([])
     })
   })
 
@@ -112,6 +115,8 @@ describe('shiritori ユーティリティ', () => {
     it('ひらがなと伸ばし棒は有効', () => {
       expect(isValidInputChars('しりとり')).toBe(true)
       expect(isValidInputChars('らーめん')).toBe(true)
+      expect(isValidInputChars('ぱんだ')).toBe(true)
+      expect(isValidInputChars('ゔぁよりん')).toBe(true)
     })
 
     it('空文字は無効', () => {
@@ -144,21 +149,76 @@ describe('shiritori ユーティリティ', () => {
         expect(result.valid).toBe(true)
       })
 
+      it('濁点・半濁点の付け外し（緩和）が成立する', () => {
+        // は行：清音・濁音・半濁音の相互接続
+        expect(validateWordForFrontend('ぱんだ', { requiredStartChar: 'は' }).valid).toBe(true)
+        expect(validateWordForFrontend('ばなな', { requiredStartChar: 'は' }).valid).toBe(true)
+        expect(validateWordForFrontend('はさみ', { requiredStartChar: 'ぱ' }).valid).toBe(true)
+        expect(validateWordForFrontend('ばなな', { requiredStartChar: 'ぱ' }).valid).toBe(true)
+        expect(validateWordForFrontend('ぱんつ', { requiredStartChar: 'ぱ' }).valid).toBe(true)
+        expect(validateWordForFrontend('ぱんだ', { requiredStartChar: 'ば' }).valid).toBe(true)
+        expect(validateWordForFrontend('はさみ', { requiredStartChar: 'ば' }).valid).toBe(true)
+
+        // か行
+        expect(validateWordForFrontend('がす', { requiredStartChar: 'か' }).valid).toBe(true)
+        expect(validateWordForFrontend('からす', { requiredStartChar: 'が' }).valid).toBe(true)
+
+        // さ行
+        expect(validateWordForFrontend('ざる', { requiredStartChar: 'さ' }).valid).toBe(true)
+        expect(validateWordForFrontend('さる', { requiredStartChar: 'ざ' }).valid).toBe(true)
+
+        // た行
+        expect(validateWordForFrontend('だるま', { requiredStartChar: 'た' }).valid).toBe(true)
+        expect(validateWordForFrontend('たいこ', { requiredStartChar: 'だ' }).valid).toBe(true)
+
+        // う行（う・ゔ）
+        expect(validateWordForFrontend('ゔぇーる', { requiredStartChar: 'う' }).valid).toBe(true)
+        expect(validateWordForFrontend('うみ', { requiredStartChar: 'ゔ' }).valid).toBe(true)
+      })
+
+      it('Unicode 結合文字（NFD）でも正しく判定される', () => {
+        // 'は' + U+309A (半濁点) -> 'ぱ'
+        const nfdPanda = 'は\u309Aんだ'
+        expect(validateWordForFrontend(nfdPanda, { requiredStartChar: 'は' }).valid).toBe(true)
+        expect(validateWordForFrontend(nfdPanda, { requiredStartChar: 'ぱ' }).valid).toBe(true)
+      })
+
       it('接続条件を満たさない単語は拒否', () => {
         const result = validateWordForFrontend('ごりら', { requiredStartChar: 'り' })
         expect(result.valid).toBe(false)
         expect(result.reason).toBe('前の単語の最後の文字から始まっていません。')
       })
 
-      it('最初の単語は濁点緩和なし', () => {
+      it('最初の単語でも濁点・半濁点の付け外し（緩和）が可能', () => {
         const result = validateWordForFrontend('がっこう', { requiredStartChar: 'か', isFirstWord: true })
-        expect(result.valid).toBe(false)
+        expect(result.valid).toBe(true)
+
+        const result2 = validateWordForFrontend('ぱんだ', { requiredStartChar: 'は', isFirstWord: true })
+        expect(result2.valid).toBe(true)
+
+        const result3 = validateWordForFrontend('ばなな', { requiredStartChar: 'は', isFirstWord: true })
+        expect(result3.valid).toBe(true)
+
+        const result4 = validateWordForFrontend('はいしゃ', { requiredStartChar: 'は', isFirstWord: true })
+        expect(result4.valid).toBe(true)
+
+        // 異なるグループは拒否
+        const result5 = validateWordForFrontend('さる', { requiredStartChar: 'は', isFirstWord: true })
+        expect(result5.valid).toBe(false)
       })
 
-      it('「ん」で終わる単語は拒否', () => {
+      it('「ん」で終わる単語（伸ばし棒含む）は拒否', () => {
         const result = validateWordForFrontend('きりん', { requiredStartChar: 'き' })
         expect(result.valid).toBe(false)
         expect(result.reason).toBe('「ん」で終わる単語は使えません。')
+
+        const resultProlonged = validateWordForFrontend('らーめんー', { requiredStartChar: 'ら' })
+        expect(resultProlonged.valid).toBe(false)
+        expect(resultProlonged.reason).toBe('「ん」で終わる単語は使えません。')
+
+        const resultUdon = validateWordForFrontend('うどんーー', { requiredStartChar: 'う' })
+        expect(resultUdon.valid).toBe(false)
+        expect(resultUdon.reason).toBe('「ん」で終わる単語は使えません。')
       })
 
       it('既出単語は拒否', () => {
