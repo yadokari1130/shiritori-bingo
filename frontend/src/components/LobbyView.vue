@@ -238,11 +238,10 @@ async function onDissolveRoom(): Promise<void> {
       {{ store.errorMessage }}
     </p>
 
-    <div>
+    <div class="lobby-grid">
       <!-- 左列：ルーム情報・参加者一覧・操作 -->
-      <v-row>
-        <v-col cols="12" lg="4">
-          <div class="lobby-main-col">
+      <div class="lobby-grid-main">
+        <div class="lobby-main-col">
             <!-- 招待URL -->
             <section class="panel setup-panel mb-4">
               <div class="section-heading">
@@ -463,10 +462,10 @@ async function onDissolveRoom(): Promise<void> {
               </p>
             </section>
           </div>
-        </v-col>
+        </div>
 
         <!-- 右列：ルール設定プレビュー／編集（親のみ編集可能） -->
-        <v-col cols="12" lg="8">
+        <div class="lobby-grid-side">
           <div class="lobby-side-col">
             <section class="panel setup-panel">
               <div class="section-heading">
@@ -503,9 +502,8 @@ async function onDissolveRoom(): Promise<void> {
               </div>
             </section>
           </div>
-        </v-col>
-      </v-row>
-    </div>
+        </div>
+      </div>
 
     <!-- ルール説明モーダル -->
     <RuleExplanationModal
@@ -519,6 +517,19 @@ async function onDissolveRoom(): Promise<void> {
 .lobby-view {
   display: grid;
   gap: 20px;
+}
+
+.lobby-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .lobby-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .url-row {

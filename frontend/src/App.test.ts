@@ -1,7 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createVuetify } from 'vuetify'
 import { nextTick } from 'vue'
 import App from './App.vue'
 import { useGameStore } from './store/game'
@@ -16,14 +15,8 @@ describe('App', () => {
     const pinia = createPinia()
     const wrapper = mount(App, {
       global: {
-        plugins: [createVuetify(), pinia],
+        plugins: [pinia],
         stubs: {
-          VApp: { template: '<div><slot /></div>' },
-          VAppBar: { template: '<header><slot /></header>' },
-          VAppBarTitle: { template: '<span><slot /></span>' },
-          VMain: { template: '<main><slot /></main>' },
-          VSpacer: { template: '<span />' },
-          VChip: { template: '<span><slot /></span>' },
           TopView: { template: '<div data-testid="top-view">トップ画面</div>' },
           LobbyView: { template: '<div data-testid="lobby-view">ロビー画面</div>' },
           PlayingView: { template: '<div data-testid="playing-view">対戦画面</div>' },
@@ -52,6 +45,7 @@ describe('App', () => {
     store.gameState = {
       phase: 'playing',
       settings: createDefaultSettings(),
+      hasPassword: false,
       hostPlayerId: 'host',
       freeChar: 'あ',
       players: [],

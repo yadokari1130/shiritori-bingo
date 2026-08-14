@@ -262,26 +262,26 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
     </p>
 
     <!-- ゲームサマリー（4枚のカード） -->
-    <v-row align="stretch">
-      <v-col cols="6" lg="3">
+    <div class="summary-cards-grid">
+      <div class="summary-card-item">
         <div class="summary-card">
           <span class="summary-label">現在の手番</span>
           <strong class="summary-value">{{ currentPlayerName || 'なし' }}</strong>
         </div>
-      </v-col>
-      <v-col cols="6" lg="3">
+      </div>
+      <div class="summary-card-item">
         <div class="summary-card">
           <span class="summary-label">現在の開始文字</span>
           <span class="start-letter">{{ requiredStartChar || '—' }}</span>
         </div>
-      </v-col>
-      <v-col cols="6" lg="3">
+      </div>
+      <div class="summary-card-item">
         <div class="summary-card">
           <span class="summary-label">ターン / 終了条件</span>
           <strong class="summary-value">{{ turnProgress }}</strong>
         </div>
-      </v-col>
-      <v-col cols="6" lg="3">
+      </div>
+      <div class="summary-card-item">
         <div
           class="summary-card timer-card"
           :class="{
@@ -296,8 +296,8 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
             {{ store.gameState?.settings.forceSkipOnTimeout ? '時間切れで強制スキップ' : '時間切れ後も入力できます' }}
           </p>
         </div>
-      </v-col>
-    </v-row>
+      </div>
+    </div>
 
     <!-- 入力コントロールパネル -->
     <section class="panel control-panel">
@@ -489,6 +489,28 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
 .game-screen {
   display: grid;
   gap: 20px;
+}
+
+.summary-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+@media (max-width: 960px) {
+  .summary-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.summary-card-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-card-item .summary-card {
+  height: 100%;
 }
 
 .header-actions {

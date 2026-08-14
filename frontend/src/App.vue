@@ -28,16 +28,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <v-app class="app-root">
-    <v-main class="main-content">
+  <div class="app-root">
+    <div class="main-content">
       <main class="app-shell">
         <TopView v-if="store.view === 'top'" />
         <LobbyView v-else-if="store.view === 'lobby'" />
         <PlayingView v-else-if="store.view === 'playing'" />
         <ResultView v-else-if="store.view === 'result'" />
       </main>
-    </v-main>
-  </v-app>
+    </div>
+  </div>
 </template>
 
 <style scoped>

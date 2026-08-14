@@ -256,9 +256,9 @@ function extractRoomId(input: string): string {
       </p>
 
 
-      <v-row>
+      <div class="top-grid">
         <!-- ルーム参加パネル（左：幅1） -->
-        <v-col cols="12" md="4">
+        <div class="top-grid-col-join">
           <section class="panel setup-panel join-panel">
             <div class="section-heading">
               <h2>ルームに参加</h2>
@@ -351,10 +351,10 @@ function extractRoomId(input: string): string {
               </template>
             </div>
           </section>
-        </v-col>
+        </div>
 
         <!-- ルール設定＆ルーム作成パネル（右：幅2） -->
-        <v-col cols="12" md="8">
+        <div class="top-grid-col-create">
           <section class="panel setup-panel">
             <div class="section-heading">
               <h2>ルール設定</h2>
@@ -397,8 +397,8 @@ function extractRoomId(input: string): string {
               </fieldset>
             </RuleSettingsForm>
           </section>
-        </v-col>
-      </v-row>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -407,6 +407,19 @@ function extractRoomId(input: string): string {
 .top-view {
   display: grid;
   gap: 20px;
+}
+
+.top-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .top-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .join-panel {
