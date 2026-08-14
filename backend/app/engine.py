@@ -595,8 +595,11 @@ def _build_result(
     )
 
 
+MAX_UNDO_HISTORY = 5
+
+
 def push_undo_snapshot(state: GameState) -> UndoSnapshot:
-    """現在の状態をundoスナップショットとして積む。"""
+    """現在の状態をundoスナップショットとして積む（最大MAX_UNDO_HISTORY件保持）。"""
     snapshot_state = state.model_copy(deep=True)
     snapshot_state.undoHistory = []
     snapshot = UndoSnapshot(
@@ -604,6 +607,8 @@ def push_undo_snapshot(state: GameState) -> UndoSnapshot:
         restoredTurnTimeLimitMs=state.currentTurnTimeLimitMs,
     )
     state.undoHistory.append(snapshot)
+    if len(state.undoHistory) > MAX_UNDO_HISTORY:
+        state.undoHistory = state.undoHistory[-MAX_UNDO_HISTORY:]
     return snapshot
 
 
@@ -713,24 +718,11 @@ def process_word(state: GameState, player_id: str, word: str, now_ms: int) -> Ga
     push_undo_snapshot(state)
 
     # 無効入力判定
-    invalid = False
-    if not is_valid_word_length(word, state.settings) or word in state.usedWords:
-        invalid = True
-    elif not state.wordHistory:
-        if not is_connected(state.freeChar, word[0]):
-            invalid = True
-    else:
-        last_word = state.wordHistory[-1].word
-        tail, valid = normalize_tail(last_word)
-        if not valid or not is_connected(tail, word[0]):
-            invalid = True
-
-    tail, valid = normalize_tail(word)
-    if not valid:
-        invalid = True
-
-    if invalid:
+    reason = get_word_invalid_reason(state, word)
+    if reason is not None:
         return _apply_invalid_action(state, now_ms)
+
+    tail, _ = normalize_tail(word)
 
     # 有効単語
     opened_chars = _apply_word_openings(state, word)

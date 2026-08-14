@@ -15,11 +15,13 @@ export interface Settings {
   teamCount: number
   timeLimitSeconds: number
   extraTimeSeconds: number
+  forceSkipOnTimeout: boolean
   endCondition: 'turns' | 'bingos'
   targetTurns: number
   targetBingos: number
   invalidAction: 'skip' | 'disqualify'
   cardOptions: CardOptions
+  inputWordCheck: boolean
   minWordLength: number | null
   maxWordLength: number | null
 }
@@ -213,20 +215,22 @@ export function createDefaultSettings(): Settings {
     cardSize: 5,
     mode: 'individual',
     teamCount: 2,
-    timeLimitSeconds: 60,
+    timeLimitSeconds: 30,
     extraTimeSeconds: 10,
+    forceSkipOnTimeout: false,
     endCondition: 'turns',
-    targetTurns: 5,
-    targetBingos: 1,
+    targetTurns: 3,
+    targetBingos: 3,
     invalidAction: 'skip',
     cardOptions: {
-      yoon: true,
-      sokuon: true,
-      prolonged: true,
+      yoon: false,
+      sokuon: false,
+      prolonged: false,
       smallA: false,
-      dakuten: false,
-      handakuten: false,
+      dakuten: true,
+      handakuten: true,
     },
+    inputWordCheck: true,
     minWordLength: null,
     maxWordLength: null,
   }

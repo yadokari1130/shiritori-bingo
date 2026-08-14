@@ -805,12 +805,12 @@ def test_input_word_check_setting_and_invalid_word_action():
         )
         assert act_invalid_chars.status_code == 400
 
-        # 空文字も400で弾かれる
+        # 空文字も400/422で弾かれる
         act_empty = current_client.post(
             f"/api/rooms/{room_id}/action",
             json={"type": "word", "word": ""},
         )
-        assert act_empty.status_code == 400
+        assert act_empty.status_code in (400, 422)
 
         # ゲームルール上無効な単語（「ん」で終わる）を送信 -> ターンスキップが適用され手番が進む
         act_invalid_rule = current_client.post(

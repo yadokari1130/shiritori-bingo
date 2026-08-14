@@ -12,8 +12,8 @@ class CardOptions(BaseModel):
     sokuon: bool = False
     prolonged: bool = False
     smallA: bool = False
-    dakuten: bool = False
-    handakuten: bool = False
+    dakuten: bool = True
+    handakuten: bool = True
 
 
 class Settings(BaseModel):
@@ -214,7 +214,7 @@ class CreateRoomRequest(BaseModel):
     """ルーム作成リクエスト。"""
 
     settings: Settings
-    password: str | None = None
+    password: str | None = Field(default=None, max_length=100)
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -232,53 +232,53 @@ class StartGameRequest(BaseModel):
 class JoinRoomRequest(BaseModel):
     """ルーム参加リクエスト。"""
 
-    password: str | None = None
-    name: str | None = None
+    password: str | None = Field(default=None, max_length=100)
+    name: str | None = Field(default=None, max_length=50)
 
 
 class NameChangeRequest(BaseModel):
     """名前変更リクエスト。"""
 
-    name: str
+    name: str = Field(..., min_length=1, max_length=50)
 
 
 class ChangeTeamRequest(BaseModel):
     """チーム変更リクエスト。"""
 
-    teamId: str | None = None
+    teamId: str | None = Field(default=None, max_length=100)
 
 
 class ChangeHostRequest(BaseModel):
     """親変更リクエスト。"""
 
-    playerId: str
+    playerId: str = Field(..., min_length=1, max_length=100)
 
 
 class KickPlayerRequest(BaseModel):
     """参加者強制退出リクエスト。"""
 
-    playerId: str
+    playerId: str = Field(..., min_length=1, max_length=100)
 
 
 class WordAction(BaseModel):
     """単語確定アクション。"""
 
     type: Literal["word"]
-    word: str
+    word: str = Field(..., min_length=1, max_length=100)
 
 
 class SkipAction(BaseModel):
     """スキップアクション。"""
 
     type: Literal["skip"]
-    subjectId: str
+    subjectId: str = Field(..., min_length=1, max_length=100)
 
 
 class DisqualifyAction(BaseModel):
     """失格アクション。"""
 
     type: Literal["disqualify"]
-    subjectId: str
+    subjectId: str = Field(..., min_length=1, max_length=100)
 
 
 class UndoAction(BaseModel):

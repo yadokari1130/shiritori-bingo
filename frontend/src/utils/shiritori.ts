@@ -146,54 +146,58 @@ function hasNormalCharBefore(tail: string, endIndex: number): boolean {
 }
 
 /**
- * 語尾を正規化して次の開始文字候補リストを返す。
- * 接続判定緩和のため、同一グループに属する文字すべてを返す。
+ * 単語の語尾を正規化して代表文字1文字と有効性を返す（バックエンドの normalize_tail と等価）。
  * 仕様 4.3.3
  */
-export function normalizeTail(tail: string): string[] {
-  const normalized = tail.normalize('NFC')
-  if (normalized.length === 0) return []
+export function normalizeTailChar(word: string): { char: string; valid: boolean } {
+  const normalized = word.normalize('NFC')
+  if (normalized.length === 0) return { char: '', valid: false }
 
   // 末尾の伸ばし棒をスキップ
   let i = normalized.length - 1
   while (i >= 0 && PROLONGED_CHARS.includes(normalized[i])) {
     i--
   }
-  if (i < 0) return [] // 「ーー」など
+  if (i < 0) return { char: '', valid: false } // 「ーー」など
 
   const ch = normalized[i]
 
   // 1. 語尾が「ん」なら無効（「ん」「んー」など）
-  if (ch === 'ん') return []
+  if (ch === 'ん') return { char: 'ん', valid: false }
 
-  // 2. 拗音 → 直音（グループ展開含む）
+  // 2. 拗音 → 直音
   if (YOON_CHARS.includes(ch)) {
-    if (!hasNormalCharBefore(normalized, i)) return []
+    if (!hasNormalCharBefore(normalized, i)) return { char: '', valid: false }
     const straight = YOON_TO_STRAIGHT[ch]
-    if (!straight) return []
-    const group = DAKUON_GROUP[straight]
-    return group ? [...group] : [straight]
+    return straight ? { char: straight, valid: true } : { char: '', valid: false }
   }
 
-  // 3. 促音 → つ（つ・づ グループ）
+  // 3. 促音 → つ
   if (SOKUON_CHARS.includes(ch)) {
-    if (!hasNormalCharBefore(normalized, i)) return []
-    const group = DAKUON_GROUP['つ']
-    return group ? [...group] : ['つ']
+    if (!hasNormalCharBefore(normalized, i)) return { char: '', valid: false }
+    return { char: 'つ', valid: true }
   }
 
-  // 4. 小さいあ行 → 直音（グループ展開含む：例「ぅ」→「う・ゔ」）
+  // 4. 小さいあ行 → 直音
   if (SMALL_A_CHARS.includes(ch)) {
-    if (!hasNormalCharBefore(normalized, i)) return []
+    if (!hasNormalCharBefore(normalized, i)) return { char: '', valid: false }
     const straight = SMALL_A_TO_STRAIGHT[ch]
-    if (!straight) return []
-    const group = DAKUON_GROUP[straight]
-    return group ? [...group] : [straight]
+    return straight ? { char: straight, valid: true } : { char: '', valid: false }
   }
 
   // 5. 通常文字
-  const group = DAKUON_GROUP[ch]
-  return group ? [...group] : [ch]
+  return { char: ch, valid: true }
+}
+
+/**
+ * 語尾を正規化して次の開始文字候補リスト（同一濁点グループ展開含む）を返す。
+ * 仕様 4.3.3
+ */
+export function normalizeTail(tail: string): string[] {
+  const { char, valid } = normalizeTailChar(tail)
+  if (!valid || !char) return []
+  const group = DAKUON_GROUP[char]
+  return group ? [...group] : [char]
 }
 
 /** 単語の最後の文字を取得する（空の場合は空文字） */
