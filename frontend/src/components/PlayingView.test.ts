@@ -25,6 +25,7 @@ describe('PlayingView タイマー・時間同期', () => {
       phase: 'playing',
       settings: createDefaultSettings(), // timeLimitSeconds: 30
       hostPlayerId: 'p1',
+      hasPassword: false,
       freeChar: 'あ',
       players: [
         {
@@ -92,6 +93,7 @@ describe('PlayingView タイマー・時間同期', () => {
       phase: 'playing',
       settings: createDefaultSettings(),
       hostPlayerId: 'p1',
+      hasPassword: false,
       freeChar: 'あ',
       players: [
         {
@@ -144,6 +146,7 @@ describe('PlayingView タイマー・時間同期', () => {
       phase: 'playing',
       settings,
       hostPlayerId: 'p1',
+      hasPassword: false,
       freeChar: 'あ',
       players: [
         {
@@ -199,6 +202,7 @@ describe('PlayingView タイマー・時間同期', () => {
       phase: 'playing',
       settings,
       hostPlayerId: 'p1',
+      hasPassword: false,
       freeChar: 'あ',
       players: [
         {
@@ -251,6 +255,7 @@ describe('PlayingView タイマー・時間同期', () => {
       phase: 'playing',
       settings,
       hostPlayerId: 'p1',
+      hasPassword: false,
       freeChar: 'あ',
       players: [
         {
@@ -306,6 +311,7 @@ describe('PlayingView タイマー・時間同期', () => {
       phase: 'playing',
       settings: createDefaultSettings(),
       hostPlayerId: 'p1',
+      hasPassword: false,
       freeChar: 'あ',
       players: [
         {
@@ -353,6 +359,69 @@ describe('PlayingView タイマー・時間同期', () => {
     expect(modal?.textContent).toContain('ゲームルール説明')
 
     wrapper.unmount()
+  })
+
+  it('単語履歴は新しい順に表示され、番号は古いほうから1、最新が大きい数字になる', async () => {
+    const store = useGameStore()
+    store.myPlayerId = 'p1'
+    store.applyGameState({
+      phase: 'playing',
+      settings: createDefaultSettings(),
+      hostPlayerId: 'p1',
+      hasPassword: false,
+      freeChar: 'あ',
+      players: [
+        {
+          id: 'p1',
+          name: '太郎',
+          teamId: null,
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: { size: 3, cells: [], freeChar: 'あ' },
+          bingoLineIds: [],
+          openedCellCount: 1,
+        },
+      ],
+      teams: [],
+      playOrder: ['p1'],
+      round: 3,
+      roundRoster: ['p1'],
+      orderIndex: 0,
+      currentPlayerId: 'p1',
+      currentTeamId: null,
+      requiredStartChar: 'ご',
+      usedWords: ['りんご', 'ごりら', 'らっぱ'],
+      wordHistory: [
+        { word: 'りんご', playerId: 'p1', round: 1, sequence: 1, openedChars: ['り', 'ん', 'ご'] },
+        { word: 'ごりら', playerId: 'p1', round: 2, sequence: 2, openedChars: ['ら'] },
+        { word: 'らっぱ', playerId: 'p1', round: 3, sequence: 3, openedChars: ['ぱ'] },
+      ],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: Date.now(),
+      result: null,
+      undoHistory: [],
+    })
+
+    const wrapper = mount(PlayingView)
+    const ol = wrapper.find('ol.history-list')
+    expect(ol.exists()).toBe(true)
+    expect(ol.attributes('reversed')).toBeDefined()
+
+    const items = ol.findAll('li')
+    expect(items).toHaveLength(3)
+
+    // 新しい順に並んでいること（先頭が最新の単語「らっぱ」）
+    expect(items[0].find('.history-word').text()).toBe('らっぱ')
+    expect(items[1].find('.history-word').text()).toBe('ごりら')
+    expect(items[2].find('.history-word').text()).toBe('りんご')
+
+    // 番号（value属性）は古いほうが1、新しいほうが大きい数字になっていること
+    expect(items[0].attributes('value')).toBe('3')
+    expect(items[1].attributes('value')).toBe('2')
+    expect(items[2].attributes('value')).toBe('1')
   })
 })
 

@@ -462,10 +462,11 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
           <div v-if="wordHistoryForDisplay.length === 0" class="empty-text">
             まだ有効な単語はありません。
           </div>
-          <ol v-else class="history-list">
+          <ol v-else class="history-list" reversed>
             <li
               v-for="(entry, idx) in wordHistoryForDisplay"
               :key="historyKey(entry, idx)"
+              :value="entry.sequence"
             >
               <span class="history-word">{{ entry.word }}</span>
               <span class="history-meta">
