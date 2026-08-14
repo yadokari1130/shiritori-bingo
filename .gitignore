@@ -18,7 +18,9 @@ build/
 .env.*.local
 
 # データベース
-data/
+/data/
+/backend/data/
+!backend/app/data/
 *.db
 *.db-journal
 *.db-wal

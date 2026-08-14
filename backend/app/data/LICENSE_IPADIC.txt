@@ -1,0 +1,18 @@
+Copyright 2000, 2001, 2002, 2003 Nara Institute of Science and Technology. All Rights Reserved.
+
+Use, reproduction, and distribution of this software is permitted.
+Any copy of this software, whether in its original form or modified,
+must include both the above copyright notice and the following
+paragraphs.
+
+Nara Institute of Science and Technology (NAIST)
+is the author of the software, but does not warrant the software
+is free from defect, and assumes no liability for any damages
+resulting from use of the software.
+
+This software is provided "as is" without express or implied
+warranty, including, but not limited to, the implied warranties of
+merchantability and fitness for a particular purpose.
+
+This dictionary dataset (nouns.json) is derived from IPA morphological
+dictionary (IPADIC).

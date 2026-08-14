@@ -853,3 +853,51 @@ def test_start_game_with_updated_settings():
         for p in state["players"]:
             assert p["card"]["size"] == 3
             assert len(p["card"]["cells"]) == 9
+
+
+def test_request_id_and_origin_security():
+    """Request-IDの付与と不正Originの拒否テスト"""
+    with TestClient(app) as client:
+        # 正常なリクエストには X-Request-ID が付与される
+        res = client.get("/api/health")
+        assert res.status_code == 200
+        assert "X-Request-ID" in res.headers
+
+        # 不正なOriginからの状態変更POSTは403で拒否される
+        bad_origin_res = client.post(
+            "/api/rooms",
+            json={"settings": Settings().model_dump()},
+            headers={"Origin": "https://malicious-site.com"},
+        )
+        assert bad_origin_res.status_code == 403
+
+
+def test_undo_max_history_limit():
+    """undoHistoryが最大5件に制限され無限に肥大化しないことのテスト"""
+    settings = Settings(cardSize=3, endCondition="turns", targetTurns=10)
+    with TestClient(app) as base:
+        host_client, joiner_client = make_clients(base, 2)
+        res = host_client.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+        host_client.post(f"/api/rooms/{room_id}/join", json={"name": "P1"})
+        joiner_client.post(f"/api/rooms/{room_id}/join", json={"name": "P2"})
+
+        start_res = host_client.post(f"/api/rooms/{room_id}/start")
+        state = start_res.json()["gameState"]
+
+        # 6回以上親が手番をスキップ
+        for i in range(7):
+            current_pid = state["currentPlayerId"]
+            act = host_client.post(
+                f"/api/rooms/{room_id}/action",
+                json={"type": "skip", "subjectId": current_pid},
+            )
+            assert act.status_code == 200
+            state = act.json()["gameState"]
+
+        # undoHistoryが最大5件以内であること（内部状態の検証）
+        import asyncio
+        from app import dao
+        loaded = asyncio.run(dao.load_room_state(room_id))
+        assert loaded is not None
+        assert len(loaded.undoHistory) <= 5
