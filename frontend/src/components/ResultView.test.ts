@@ -168,5 +168,65 @@ describe('ResultView', () => {
     await topButtons[1].trigger('click')
     expect(leaveSpy).toHaveBeenCalledTimes(2)
   })
+
+  it('ホスト（親）の場合は「ロビーに戻る（親のみ）」ボタンが表示され、非ホストの場合は表示されない', async () => {
+    const { wrapper, store } = factory()
+    store.myPlayerId = 'host'
+    store.gameState!.players = [
+      {
+        id: 'host',
+        name: 'ホストプレイヤー',
+        teamId: null,
+        status: 'active',
+        connectionStatus: 'connected',
+        disconnectedAt: null,
+        card: null,
+        bingoLineIds: [],
+        openedCellCount: 0,
+        isCpu: false,
+      },
+    ]
+    await nextTick()
+
+    expect(store.isHost).toBe(true)
+    const lobbyBtn = wrapper.findAll('button').find((btn) => btn.text().includes('ロビーに戻る（親のみ）'))
+    expect(lobbyBtn).toBeDefined()
+
+    // 非ホストに変更
+    store.myPlayerId = 'guest'
+    await nextTick()
+    expect(store.isHost).toBe(false)
+    const noLobbyBtn = wrapper.findAll('button').find((btn) => btn.text().includes('ロビーに戻る（親のみ）'))
+    expect(noLobbyBtn).toBeUndefined()
+  })
+
+  it('CPUプレイヤーは順位表に🤖 CPUバッジが表示され、ホストにはならない', async () => {
+    const { wrapper, store } = factory()
+    store.gameState!.result!.snapshot.players.push({
+      playerId: 'cpu-1',
+      name: 'CPU 1',
+      teamId: null,
+      status: 'active',
+      bingoLineIds: [],
+      openedCellCount: 1,
+      connectionStatus: 'connected',
+      isCpu: true,
+      card: null,
+    })
+    store.gameState!.result!.rankings.push({
+      rank: 2,
+      subjectType: 'player',
+      subjectId: 'cpu-1',
+      bingoCount: 0,
+      openedCellCount: 1,
+      status: 'active',
+    })
+    await nextTick()
+
+    const cpuBadge = wrapper.find('.cpu-badge')
+    expect(cpuBadge.exists()).toBe(true)
+    expect(cpuBadge.text()).toContain('🤖 CPU')
+  })
 })
+
 

@@ -47,7 +47,7 @@ async def _cleanup_once() -> None:
     now = dao.now_ms()
 
     # 切断通知を受け取れない場合に備え、ハートビートの停止した接続を切断扱いにする。
-    stale_connections = await dao.expire_stale_sessions(now - 10 * 1000)
+    stale_connections = await dao.expire_stale_sessions(now - 30 * 1000)
     for room_id, player_id in set(stale_connections):
         async with db._write_lock:
             state = await dao.load_room_state(room_id)

@@ -52,11 +52,13 @@ _public_state = broadcast.public_state
 
 
 async def _elect_new_host_if_needed(state: GameState) -> bool:
-    """ホストが不在またはCPUの場合、接続中の先頭参加者をホストにする。変更があれば True。"""
+    """ホストが不在、CPU、または切断中の場合、接続中の先頭参加者をホストにする。変更があれば True。"""
+    current_host = next((p for p in state.players if p.id == state.hostPlayerId), None)
     is_invalid_host = (
         state.hostPlayerId is None
-        or state.hostPlayerId not in {p.id for p in state.players}
-        or any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+        or current_host is None
+        or current_host.isCpu
+        or current_host.connectionStatus != "connected"
     )
     if is_invalid_host:
         new_host = cleanup.elect_host(state.players)
@@ -991,7 +993,6 @@ async def events(room_id: str, request: Request):
                     notice="親が変更されました。" if host_changed else None,
                 )
 
-            last_touch_ms = dao.now_ms()
             while not disconnect_task.done():
                 get_task = asyncio.create_task(queue.get())
                 done, pending = await asyncio.wait(
@@ -1004,9 +1005,7 @@ async def events(room_id: str, request: Request):
                     break
 
                 now_touch = dao.now_ms()
-                if now_touch - last_touch_ms >= 30_000:
-                    await dao.touch_session(session["id"])
-                    last_touch_ms = now_touch
+                await dao.touch_session(session["id"])
 
                 if get_task in done:
                     payload = get_task.result()
