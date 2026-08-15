@@ -12,11 +12,7 @@ RUN pip install --no-cache-dir uv \
 COPY app ./app
 COPY migrations ./migrations
 
-RUN useradd -u 1000 -m -s /bin/bash appuser \
-    && mkdir -p /app/data \
-    && chown -R appuser:appuser /app
-
-USER appuser
+RUN mkdir -p /app/data
 
 EXPOSE 3000
 
