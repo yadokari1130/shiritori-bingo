@@ -2,6 +2,35 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useGameStore } from './game'
 import { createDefaultSettings } from '../types'
+import type { GameState } from '../types'
+
+function createMockGameState(overrides: Partial<GameState> = {}): GameState {
+  return {
+    phase: 'setup',
+    settings: createDefaultSettings(),
+    hasPassword: false,
+    hostPlayerId: 'host',
+    freeChar: 'あ',
+    players: [],
+    teams: [],
+    playOrder: [],
+    round: 1,
+    roundRoster: [],
+    orderIndex: 0,
+    currentPlayerId: null,
+    currentTeamId: null,
+    requiredStartChar: 'あ',
+    usedWords: [],
+    wordHistory: [],
+    remainingTimeMs: 30000,
+    currentTurnTimeLimitMs: 30000,
+    currentTurnInputPlayerId: null,
+    turnStartedAt: null,
+    result: null,
+    undoHistory: [],
+    ...overrides,
+  }
+}
 
 describe('game ストア', () => {
   beforeEach(() => {
@@ -16,60 +45,22 @@ describe('game ストア', () => {
 
   it('gameState.phase で画面を解決する', () => {
     const store = useGameStore()
-    store.applyGameState({
-      phase: 'setup',
-      settings: createDefaultSettings(),
-      hostPlayerId: 'host',
-      freeChar: 'あ',
-      players: [],
-      teams: [],
-      playOrder: [],
-      round: 1,
-      roundRoster: [],
-      orderIndex: 0,
-      currentPlayerId: null,
-      currentTeamId: null,
-      requiredStartChar: 'あ',
-      usedWords: [],
-      wordHistory: [],
-      remainingTimeMs: 30000,
-      currentTurnTimeLimitMs: 30000,
-      currentTurnInputPlayerId: null,
-      turnStartedAt: null,
-      result: null,
-      undoHistory: [],
-    })
+    store.applyGameState(createMockGameState({ phase: 'setup' }))
     expect(store.view).toBe('lobby')
   })
 
   it('playing 状態なら canInput は現在プレイヤーのみ true', () => {
     const store = useGameStore()
     store.myPlayerId = 'p1'
-    store.applyGameState({
+    store.applyGameState(createMockGameState({
       phase: 'playing',
-      settings: createDefaultSettings(),
-      hostPlayerId: 'host',
-      freeChar: 'あ',
       players: [
         { id: 'p1', name: '太郎', teamId: null, status: 'active', connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: null, openedCellCount: null },
       ],
-      teams: [],
       playOrder: ['p1'],
-      round: 1,
       roundRoster: ['p1'],
-      orderIndex: 0,
       currentPlayerId: 'p1',
-      currentTeamId: null,
-      requiredStartChar: 'あ',
-      usedWords: [],
-      wordHistory: [],
-      remainingTimeMs: 30000,
-      currentTurnTimeLimitMs: 30000,
-      currentTurnInputPlayerId: null,
-      turnStartedAt: null,
-      result: null,
-      undoHistory: [],
-    })
+    }))
     expect(store.canInput).toBe(true)
   })
 
@@ -79,31 +70,15 @@ describe('game ストア', () => {
     const joinSpy = vi.spyOn(vi_api, 'joinRoom').mockResolvedValue({
       playerId: 'p1',
       isHost: true,
-      gameState: {
+      gameState: createMockGameState({
         phase: 'setup',
-        settings: createDefaultSettings(),
         hostPlayerId: 'p1',
-        freeChar: 'あ',
         players: [
           { id: 'p1', name: '太郎', teamId: null, status: 'active', connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: null, openedCellCount: null },
         ],
-        teams: [],
         playOrder: ['p1'],
-        round: 1,
         roundRoster: ['p1'],
-        orderIndex: 0,
-        currentPlayerId: null,
-        currentTeamId: null,
-        requiredStartChar: 'あ',
-        usedWords: [],
-        wordHistory: [],
-        remainingTimeMs: 30000,
-        currentTurnTimeLimitMs: 30000,
-        currentTurnInputPlayerId: null,
-        turnStartedAt: null,
-        result: null,
-        undoHistory: [],
-      },
+      }),
     })
 
     const result = await store.tryReconnect('room123')
@@ -147,56 +122,20 @@ describe('game ストア', () => {
     vi.spyOn(vi_api, 'createRoom').mockResolvedValue({
       roomId: 'room-pass-123',
       url: 'http://localhost:5173/game/room-pass-123',
-      gameState: {
-        phase: 'setup',
-        settings: createDefaultSettings(),
+      gameState: createMockGameState({
         hasPassword: true,
-        hostPlayerId: null,
-        freeChar: '',
-        players: [],
-        teams: [],
-        playOrder: [],
-        round: 0,
-        roundRoster: [],
-        orderIndex: 0,
-        currentPlayerId: null,
-        currentTeamId: null,
-        requiredStartChar: '',
-        usedWords: [],
-        wordHistory: [],
-        remainingTimeMs: 0,
-        currentTurnTimeLimitMs: 0,
-        currentTurnInputPlayerId: null,
-        turnStartedAt: null,
-        result: null,
-      },
+      }),
     })
     const joinRoomSpy = vi.spyOn(vi_api, 'joinRoom').mockResolvedValue({
       playerId: 'p1',
       isHost: true,
-      gameState: {
-        phase: 'setup',
-        settings: createDefaultSettings(),
+      gameState: createMockGameState({
         hasPassword: true,
         hostPlayerId: 'p1',
-        freeChar: '',
         players: [{ id: 'p1', name: '作成者', teamId: null, status: 'active', connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: null, openedCellCount: null }],
-        teams: [],
         playOrder: ['p1'],
-        round: 0,
         roundRoster: ['p1'],
-        orderIndex: 0,
-        currentPlayerId: null,
-        currentTeamId: null,
-        requiredStartChar: '',
-        usedWords: [],
-        wordHistory: [],
-        remainingTimeMs: 0,
-        currentTurnTimeLimitMs: 0,
-        currentTurnInputPlayerId: null,
-        turnStartedAt: null,
-        result: null,
-      },
+      }),
     })
 
     await store.createRoom('secret123')
@@ -221,32 +160,13 @@ describe('game ストア', () => {
     store.roomId = 'room123'
     const vi_api = await import('../api')
     const changeHostSpy = vi.spyOn(vi_api, 'changeHost').mockResolvedValue({
-      gameState: {
-        phase: 'setup',
-        settings: createDefaultSettings(),
+      gameState: createMockGameState({
         hostPlayerId: 'p2',
-        freeChar: 'あ',
         players: [
           { id: 'p1', name: '太郎', teamId: null, status: 'active', connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: null, openedCellCount: null },
           { id: 'p2', name: '次郎', teamId: null, status: 'active', connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: null, openedCellCount: null },
         ],
-        teams: [],
-        playOrder: [],
-        round: 1,
-        roundRoster: [],
-        orderIndex: 0,
-        currentPlayerId: null,
-        currentTeamId: null,
-        requiredStartChar: 'あ',
-        usedWords: [],
-        wordHistory: [],
-        remainingTimeMs: 30000,
-        currentTurnTimeLimitMs: 30000,
-        currentTurnInputPlayerId: null,
-        turnStartedAt: null,
-        result: null,
-        undoHistory: [],
-      },
+      }),
     })
 
     await store.changeHost('p2')
@@ -259,31 +179,12 @@ describe('game ストア', () => {
     store.roomId = 'room123'
     const vi_api = await import('../api')
     const kickSpy = vi.spyOn(vi_api, 'kickPlayer').mockResolvedValue({
-      gameState: {
-        phase: 'setup',
-        settings: createDefaultSettings(),
+      gameState: createMockGameState({
         hostPlayerId: 'p1',
-        freeChar: 'あ',
         players: [
           { id: 'p1', name: '太郎', teamId: null, status: 'active', connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: null, openedCellCount: null },
         ],
-        teams: [],
-        playOrder: [],
-        round: 1,
-        roundRoster: [],
-        orderIndex: 0,
-        currentPlayerId: null,
-        currentTeamId: null,
-        requiredStartChar: 'あ',
-        usedWords: [],
-        wordHistory: [],
-        remainingTimeMs: 30000,
-        currentTurnTimeLimitMs: 30000,
-        currentTurnInputPlayerId: null,
-        turnStartedAt: null,
-        result: null,
-        undoHistory: [],
-      },
+      }),
     })
 
     await store.kickPlayer('p2')
@@ -297,31 +198,12 @@ describe('game ストア', () => {
     store.myPlayerId = 'p2'
     store.view = 'lobby'
 
-    store.applyGameState({
-      phase: 'setup',
-      settings: createDefaultSettings(),
+    store.applyGameState(createMockGameState({
       hostPlayerId: 'p1',
-      freeChar: 'あ',
       players: [
         { id: 'p1', name: '太郎', teamId: null, status: 'active', connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: null, openedCellCount: null },
       ],
-      teams: [],
-      playOrder: [],
-      round: 1,
-      roundRoster: [],
-      orderIndex: 0,
-      currentPlayerId: null,
-      currentTeamId: null,
-      requiredStartChar: 'あ',
-      usedWords: [],
-      wordHistory: [],
-      remainingTimeMs: 30000,
-      currentTurnTimeLimitMs: 30000,
-      currentTurnInputPlayerId: null,
-      turnStartedAt: null,
-      result: null,
-      undoHistory: [],
-    })
+    }))
 
     expect(store.view).toBe('top')
     expect(store.roomId).toBeNull()
@@ -335,11 +217,9 @@ describe('game ストア', () => {
     store.myPlayerId = 'p1'
     const vi_api = await import('../api')
     const teamSpy = vi.spyOn(vi_api, 'selectTeam').mockResolvedValue({
-      gameState: {
-        phase: 'setup',
+      gameState: createMockGameState({
         settings: { ...createDefaultSettings(), mode: 'team', teamCount: 2 },
         hostPlayerId: 'p1',
-        freeChar: 'あ',
         players: [
           { id: 'p1', name: '太郎', teamId: null, status: 'active', connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: null, openedCellCount: null },
         ],
@@ -347,22 +227,7 @@ describe('game ストア', () => {
           { id: 'team-1', status: 'active', card: null, bingoLineIds: [], openedCellCount: 0, memberPlayerIds: [] },
           { id: 'team-2', status: 'active', card: null, bingoLineIds: [], openedCellCount: 0, memberPlayerIds: [] },
         ],
-        playOrder: [],
-        round: 1,
-        roundRoster: [],
-        orderIndex: 0,
-        currentPlayerId: null,
-        currentTeamId: null,
-        requiredStartChar: 'あ',
-        usedWords: [],
-        wordHistory: [],
-        remainingTimeMs: 30000,
-        currentTurnTimeLimitMs: 30000,
-        currentTurnInputPlayerId: null,
-        turnStartedAt: null,
-        result: null,
-        undoHistory: [],
-      },
+      }),
     })
 
     await store.selectTeam(null)
@@ -370,42 +235,28 @@ describe('game ストア', () => {
     expect(store.myPlayer?.teamId).toBeNull()
   })
 
-  it('leaveAndGoToTop: api.leaveRoom を呼び出してトップ画面に戻る', async () => {
+  it('leaveAndGoToTop: api.leaveRoom を呼び出してトップ画面に戻りURLを/に更新する', async () => {
+    window.history.pushState(null, '', '/game/room123')
     const store = useGameStore()
     store.roomId = 'room123'
     store.myPlayerId = 'p1'
-    store.view = 'lobby'
-    store.gameState = {
-      phase: 'setup',
-      settings: createDefaultSettings(),
+    store.view = 'result'
+    store.gameState = createMockGameState({
+      phase: 'result',
       hostPlayerId: 'p1',
-      freeChar: 'あ',
       players: [
         { id: 'p1', name: '太郎', teamId: null, status: 'active', connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: null, openedCellCount: null },
       ],
-      teams: [],
-      playOrder: [],
-      round: 1,
-      roundRoster: [],
-      orderIndex: 0,
-      currentPlayerId: null,
-      currentTeamId: null,
-      requiredStartChar: 'あ',
-      usedWords: [],
-      wordHistory: [],
-      remainingTimeMs: 30000,
-      currentTurnTimeLimitMs: 30000,
-      currentTurnInputPlayerId: null,
-      turnStartedAt: null,
-      result: null,
-      undoHistory: [],
-    }
+    })
 
     const vi_api = await import('../api')
     const leaveSpy = vi.spyOn(vi_api, 'leaveRoom').mockResolvedValue(undefined)
+    const pushStateSpy = vi.spyOn(window.history, 'pushState')
 
     await store.leaveAndGoToTop()
     expect(leaveSpy).toHaveBeenCalledWith('room123')
+    expect(pushStateSpy).toHaveBeenCalledWith(null, '', '/')
+    expect(window.location.pathname).toBe('/')
     expect(store.view).toBe('top')
     expect(store.roomId).toBeNull()
     expect(store.myPlayerId).toBeNull()
@@ -437,29 +288,12 @@ describe('game ストア', () => {
       minWordLength: 3,
     }
 
-    const mockGameState = {
-      phase: 'playing' as const,
+    const mockGameState = createMockGameState({
+      phase: 'playing',
       settings: customSettings,
       hostPlayerId: 'p1',
-      freeChar: 'あ',
-      players: [],
-      teams: [],
-      playOrder: [],
-      round: 1,
-      roundRoster: [],
-      orderIndex: 0,
       currentPlayerId: 'p1',
-      currentTeamId: null,
-      requiredStartChar: 'あ',
-      usedWords: [],
-      wordHistory: [],
-      remainingTimeMs: 30000,
-      currentTurnTimeLimitMs: 30000,
-      currentTurnInputPlayerId: null,
-      turnStartedAt: null,
-      result: null,
-      undoHistory: [],
-    }
+    })
 
     const vi_api = await import('../api')
     const startSpy = vi.spyOn(vi_api, 'startGame').mockResolvedValue({

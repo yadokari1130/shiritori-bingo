@@ -159,11 +159,7 @@ export const useGameStore = defineStore('game', () => {
 
     // 参加していたプレイヤーが削除された（強制退出させられた等）場合
     if (myPlayerId.value && !state.players.some((p) => p.id === myPlayerId.value)) {
-      disconnectSse()
-      view.value = 'top'
-      roomId.value = null
-      myPlayerId.value = null
-      gameState.value = null
+      goToTop()
       errorMessage.value = 'ルームから退出させられました。'
       return
     }
@@ -207,7 +203,6 @@ export const useGameStore = defineStore('game', () => {
       },
       onDissolved: (message) => {
         goToTop()
-        window.history.pushState(null, '', '/')
         noticeMessage.value = message
       },
       onPing: (timestamp) => {
@@ -239,7 +234,9 @@ export const useGameStore = defineStore('game', () => {
       lastCreatedPassword.value = password
       isCreator.value = true
       applyGameState(res.gameState)
-      window.history.pushState(null, '', `/game/${res.roomId}`)
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', `/game/${res.roomId}`)
+      }
     } catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : 'ルームを作成できませんでした。'
       throw err
@@ -258,6 +255,9 @@ export const useGameStore = defineStore('game', () => {
         applyGameState(res.gameState)
       }
       connectSse(targetRoomId)
+      if (typeof window !== 'undefined' && window.location.pathname !== `/game/${targetRoomId}`) {
+        window.history.pushState(null, '', `/game/${targetRoomId}`)
+      }
     } catch (err) {
       if (err instanceof api.ApiError) {
         if (err.status === 404) {
@@ -490,6 +490,9 @@ export const useGameStore = defineStore('game', () => {
 
   /** トップ画面へ戻る（ローカル状態をリセット） */
   function goToTop(): void {
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.history.pushState(null, '', '/')
+    }
     disconnectSse()
     view.value = 'top'
     roomId.value = null
@@ -513,7 +516,6 @@ export const useGameStore = defineStore('game', () => {
       }
     }
     goToTop()
-    window.history.pushState(null, '', '/')
   }
 
   /** 部屋を解散してトップ画面へ戻る（親のみ） */
@@ -524,7 +526,6 @@ export const useGameStore = defineStore('game', () => {
     try {
       await api.deleteRoom(id)
       goToTop()
-      window.history.pushState(null, '', '/')
       noticeMessage.value = '部屋を解散しました。'
     } catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : '部屋を解散できませんでした。'
