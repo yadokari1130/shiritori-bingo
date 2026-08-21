@@ -314,7 +314,7 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
               placeholder="ひらがなで単語を入力"
               autocomplete="off"
               spellcheck="false"
-              :disabled="!store.canInput || timerExpired"
+              :disabled="store.canInput && timerExpired"
               @input="validateInput"
             >
             <button

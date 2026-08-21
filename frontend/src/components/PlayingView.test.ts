@@ -423,5 +423,106 @@ describe('PlayingView タイマー・時間同期', () => {
     expect(items[1].attributes('value')).toBe('2')
     expect(items[2].attributes('value')).toBe('1')
   })
+
+  it('自分の手番でなくても入力欄に入力でき、回答ボタンは無効のままプレビューが確認できる', async () => {
+    const store = useGameStore()
+    store.myPlayerId = 'p2' // 自分のIDはp2だが、現在の手番はp1
+    store.applyGameState({
+      phase: 'playing',
+      settings: createDefaultSettings(),
+      hostPlayerId: 'p1',
+      hasPassword: false,
+      freeChar: 'あ',
+      players: [
+        {
+          id: 'p1',
+          name: '太郎',
+          teamId: null,
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: {
+            size: 3,
+            freeChar: 'あ',
+            cells: [
+              { index: 0, row: 0, column: 0, char: 'い', isOpen: false, isFree: false },
+              { index: 1, row: 0, column: 1, char: 'ぬ', isOpen: false, isFree: false },
+              { index: 2, row: 0, column: 2, char: 'ね', isOpen: false, isFree: false },
+              { index: 3, row: 1, column: 0, char: 'こ', isOpen: false, isFree: false },
+              { index: 4, row: 1, column: 1, char: 'あ', isOpen: true, isFree: true },
+              { index: 5, row: 1, column: 2, char: 'さ', isOpen: false, isFree: false },
+              { index: 6, row: 2, column: 0, char: 'る', isOpen: false, isFree: false },
+              { index: 7, row: 2, column: 1, char: 'き', isOpen: false, isFree: false },
+              { index: 8, row: 2, column: 2, char: 'じ', isOpen: false, isFree: false },
+            ],
+          },
+          bingoLineIds: [],
+          openedCellCount: 1,
+        },
+        {
+          id: 'p2',
+          name: '次郎',
+          teamId: null,
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: {
+            size: 3,
+            freeChar: 'あ',
+            cells: [
+              { index: 0, row: 0, column: 0, char: 'い', isOpen: false, isFree: false },
+              { index: 1, row: 0, column: 1, char: 'ぬ', isOpen: false, isFree: false },
+              { index: 2, row: 0, column: 2, char: 'ね', isOpen: false, isFree: false },
+              { index: 3, row: 1, column: 0, char: 'こ', isOpen: false, isFree: false },
+              { index: 4, row: 1, column: 1, char: 'あ', isOpen: true, isFree: true },
+              { index: 5, row: 1, column: 2, char: 'さ', isOpen: false, isFree: false },
+              { index: 6, row: 2, column: 0, char: 'る', isOpen: false, isFree: false },
+              { index: 7, row: 2, column: 1, char: 'き', isOpen: false, isFree: false },
+              { index: 8, row: 2, column: 2, char: 'じ', isOpen: false, isFree: false },
+            ],
+          },
+          bingoLineIds: [],
+          openedCellCount: 1,
+        },
+      ],
+      teams: [],
+      playOrder: ['p1', 'p2'],
+      round: 1,
+      roundRoster: ['p1', 'p2'],
+      orderIndex: 0,
+      currentPlayerId: 'p1',
+      currentTeamId: null,
+      requiredStartChar: 'あ',
+      usedWords: [],
+      wordHistory: [],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: Date.now(),
+      result: null,
+      undoHistory: [],
+    })
+
+    const wrapper = mount(PlayingView)
+    const input = wrapper.find('.word-input')
+    const submitBtn = wrapper.find('button[type="submit"]')
+
+    // 自分の手番でなくても入力欄は有効
+    expect(input.attributes('disabled')).toBeUndefined()
+    // 確定（回答）ボタンは無効
+    expect(submitBtn.attributes('disabled')).toBeDefined()
+
+    // 入力してプレビューが反映されることを確認
+    await input.setValue('いぬ')
+    const previewCells = wrapper.findAll('.bingo-cell.is-preview')
+    // 太郎と次郎の両方のカードで「い」と「ぬ」がプレビュー表示される（計4マス）
+    expect(previewCells.length).toBeGreaterThan(0)
+
+    // 送信を試みても送信APIは呼ばれない
+    const submitSpy = vi.spyOn(store, 'submitWord')
+    await wrapper.find('.word-form').trigger('submit')
+    expect(submitSpy).not.toHaveBeenCalled()
+  })
 })
+
 
