@@ -273,13 +273,6 @@ function cellLabel(flags: ReturnType<typeof buildCellFlags>[number], char: strin
   font-weight: 900;
 }
 
-.bingo-cell.is-preview {
-  border: 2px dashed var(--coral);
-  background: #ffe3dc;
-  color: var(--coral-dark);
-  font-weight: 900;
-}
-
 .bingo-cell.is-reach {
   border: 2px dashed var(--gold);
   background: #fff8e1;
@@ -290,6 +283,14 @@ function cellLabel(flags: ReturnType<typeof buildCellFlags>[number], char: strin
   border: 2px dashed var(--coral);
   background: #ffede8;
   color: var(--coral-dark);
+}
+
+.bingo-cell.is-preview {
+  border: 2px solid var(--coral);
+  background: #ffe3dc;
+  color: var(--coral-dark);
+  font-weight: 900;
+  box-shadow: inset 0 0 0 2px var(--coral);
 }
 
 .bingo-cell.is-bingo {
@@ -339,4 +340,3 @@ function cellLabel(flags: ReturnType<typeof buildCellFlags>[number], char: strin
   opacity: 0.85;
 }
 </style>
-
