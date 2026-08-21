@@ -164,6 +164,23 @@ export const useGameStore = defineStore('game', () => {
       return
     }
 
+    const isTurnChanged =
+      gameState.value &&
+      gameState.value.phase === 'playing' &&
+      state.phase === 'playing' &&
+      (gameState.value.currentPlayerId !== state.currentPlayerId ||
+        gameState.value.currentTeamId !== state.currentTeamId ||
+        gameState.value.round !== state.round ||
+        gameState.value.orderIndex !== state.orderIndex)
+
+    if (isTurnChanged) {
+      assistMode.value = false
+      wordSuggestions.value = []
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(ASSIST_STORAGE_KEY, 'false')
+      }
+    }
+
     gameState.value = state
     view.value = resolveViewFromPhase(state)
     if (state.phase === 'playing' && assistMode.value && canInput.value) {

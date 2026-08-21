@@ -150,6 +150,7 @@ watch(
   () => {
     inputWord.value = ''
     inputError.value = ''
+    store.setAssistMode(false)
     nextTick(() => {
       if (store.canInput && inputRef.value) {
         inputRef.value.focus()

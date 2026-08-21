@@ -523,6 +523,75 @@ describe('PlayingView タイマー・時間同期', () => {
     await wrapper.find('.word-form').trigger('submit')
     expect(submitSpy).not.toHaveBeenCalled()
   })
+
+  it('PlayingView: 手番が移るタイミングで補助モードがOFFにリセットされる', async () => {
+    const store = useGameStore()
+    store.myPlayerId = 'p1'
+    const state1 = {
+      phase: 'playing' as const,
+      settings: createDefaultSettings(),
+      hostPlayerId: 'p1',
+      hasPassword: false,
+      freeChar: 'あ',
+      players: [
+        {
+          id: 'p1',
+          name: '太郎',
+          teamId: null,
+          status: 'active' as const,
+          connectionStatus: 'connected' as const,
+          disconnectedAt: null,
+          card: { size: 3, cells: [], freeChar: 'あ' },
+          bingoLineIds: [],
+          openedCellCount: 1,
+        },
+        {
+          id: 'p2',
+          name: '次郎',
+          teamId: null,
+          status: 'active' as const,
+          connectionStatus: 'connected' as const,
+          disconnectedAt: null,
+          card: { size: 3, cells: [], freeChar: 'あ' },
+          bingoLineIds: [],
+          openedCellCount: 1,
+        },
+      ],
+      teams: [],
+      playOrder: ['p1', 'p2'],
+      round: 1,
+      roundRoster: ['p1', 'p2'],
+      orderIndex: 0,
+      currentPlayerId: 'p1',
+      currentTeamId: null,
+      requiredStartChar: 'あ',
+      usedWords: [],
+      wordHistory: [],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: Date.now(),
+      result: null,
+      undoHistory: [],
+    }
+
+    store.applyGameState(state1)
+    store.setAssistMode(true)
+    expect(store.assistMode).toBe(true)
+
+    mount(PlayingView)
+
+    // 手番が p2 に移動
+    const state2 = {
+      ...state1,
+      orderIndex: 1,
+      currentPlayerId: 'p2',
+    }
+    store.applyGameState(state2)
+
+    expect(store.assistMode).toBe(false)
+  })
 })
+
 
 

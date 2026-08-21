@@ -158,26 +158,31 @@ describe('gameStore CPU・補助モード連携', () => {
     expect(store.wordSuggestions).toEqual(['りんご', 'りす', 'りぼん'])
   })
 
-  it('isHost: CPUプレイヤーはisHostがfalseになる', () => {
+  it('手番が移るタイミングで補助モード（候補表示）が自動的にOFFになる', async () => {
     const store = useGameStore()
-    const state = createBaseGameState()
-    state.players.push({
-      id: 'cpu-1',
-      name: 'CPU 1',
-      teamId: null,
-      status: null,
-      connectionStatus: 'connected',
-      disconnectedAt: null,
-      card: null,
-      bingoLineIds: null,
-      openedCellCount: null,
-      isCpu: true,
-    })
-    // 万が一 hostPlayerId が CPU に設定されていても、myPlayerId が cpu-1 の場合は isHost は false
-    state.hostPlayerId = 'cpu-1'
-    store.myPlayerId = 'cpu-1'
-    store.applyGameState(state)
+    const state1 = createBaseGameState()
+    state1.phase = 'playing'
+    state1.players[0].status = 'active'
+    state1.currentPlayerId = 'player-1'
+    store.roomId = 'room-1'
+    store.myPlayerId = 'player-1'
 
-    expect(store.isHost).toBe(false)
+    store.applyGameState(state1)
+    store.setAssistMode(true)
+    expect(store.assistMode).toBe(true)
+
+    // 手番が player-2 に移る
+    const state2 = {
+      ...state1,
+      orderIndex: 1,
+      currentPlayerId: 'player-2',
+    }
+    store.applyGameState(state2)
+
+    // 手番が移ったので assistMode は false にリセットされ、候補もクリアされる
+    expect(store.assistMode).toBe(false)
+    expect(store.wordSuggestions).toEqual([])
+    expect(localStorage.getItem('shiritori-bingo:assist-mode')).toBe('false')
   })
 })
+
