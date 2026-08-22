@@ -79,3 +79,7 @@ FRONTEND_ORIGIN=https://shiritori-bingo.pages.dev
 Originにはパスや末尾の`/`を指定しません。API側のOriginはフロントエンドの`VITE_API_BASE_URL`に指定し、変更後はバックエンドの再起動とフロントエンドの再ビルドが必要です。未指定のOriginや`*`はCookie付き通信のため許可されません。
 
 Docker Composeでは、ホスト側の`FRONTEND_ORIGIN`環境変数をコンテナへ渡します。未指定の場合はローカル開発用の`http://localhost:5173`になります。
+
+## ライセンス
+
+[MIT License](LICENSE)

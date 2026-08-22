@@ -2,6 +2,7 @@
 name = "shiritori-bingo-backend"
 version = "0.1.0"
 description = "しりとりビンゴのバックエンド"
+license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi[standard]>=0.116.1,<1.0.0",
