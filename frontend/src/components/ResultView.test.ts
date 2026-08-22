@@ -1,13 +1,13 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import ResultView from './ResultView.vue'
-import ConfirmModal from './ConfirmModal.vue'
 import { useGameStore } from '../store/game'
 import { createDefaultSettings } from '../types'
+import ConfirmModal from './ConfirmModal.vue'
+import ResultView from './ResultView.vue'
 
-describe('ResultView', () => {
+describe('resultView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     document.body.innerHTML = ''
@@ -181,7 +181,7 @@ describe('ResultView', () => {
     const leaveSpy = vi.spyOn(store, 'leaveAndGoToTop').mockResolvedValue()
 
     // ヘッダーとフッターにトップに戻るボタンが存在することを確認
-    const topButtons = wrapper.findAll('button').filter((btn) => btn.text().includes('トップに戻る'))
+    const topButtons = wrapper.findAll('button').filter(btn => btn.text().includes('トップに戻る'))
     expect(topButtons.length).toBe(2)
 
     // ヘッダーのボタンをクリック
@@ -232,20 +232,20 @@ describe('ResultView', () => {
     await nextTick()
 
     expect(store.isHost).toBe(true)
-    const lobbyBtn = wrapper.findAll('button').find((btn) => btn.text().includes('ロビーに戻る（親のみ）'))
+    const lobbyBtn = wrapper.findAll('button').find(btn => btn.text().includes('ロビーに戻る（親のみ）'))
     expect(lobbyBtn).toBeDefined()
 
     // 非ホストに変更
     store.myPlayerId = 'guest'
     await nextTick()
     expect(store.isHost).toBe(false)
-    const noLobbyBtn = wrapper.findAll('button').find((btn) => btn.text().includes('ロビーに戻る（親のみ）'))
+    const noLobbyBtn = wrapper.findAll('button').find(btn => btn.text().includes('ロビーに戻る（親のみ）'))
     expect(noLobbyBtn).toBeUndefined()
 
     wrapper.unmount()
   })
 
-  it('CPUプレイヤーは順位表に🤖 CPUバッジが表示され、ホストにはならない', async () => {
+  it('cPUプレイヤーは順位表に🤖 CPUバッジが表示され、ホストにはならない', async () => {
     const { wrapper, store } = factory()
     store.gameState!.result!.snapshot.players.push({
       playerId: 'cpu-1',

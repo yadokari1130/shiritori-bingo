@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
-import BingoCard from './BingoCard.vue'
 import type { BingoCard as BingoCardType } from '../types'
+import { mount } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
+import BingoCard from './BingoCard.vue'
 
-describe('BingoCard コンポーネント', () => {
+describe('bingoCard コンポーネント', () => {
   it('小文字（拗音・促音・小あ行）の文字には is-small-char クラスが付与される', () => {
     const card: BingoCardType = {
       size: 3,
@@ -91,4 +91,3 @@ describe('BingoCard コンポーネント', () => {
     expect(cellsWithPreview[2].attributes('aria-label')).toBe('う プレビュー')
   })
 })
-

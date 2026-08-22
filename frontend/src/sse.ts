@@ -17,7 +17,6 @@ export interface SseClientOptions {
   onConnectionChange?: (connected: boolean) => void
 }
 
-
 export class SseClient {
   private eventSource: EventSource | null = null
   private url: string
@@ -53,7 +52,8 @@ export class SseClient {
   }
 
   private connect(): void {
-    if (this.stopped) return
+    if (this.stopped)
+      return
 
     try {
       // withCredentials で Cookie を送信する。仕様 14.2, 14.5
@@ -77,8 +77,10 @@ export class SseClient {
         let message = '部屋が解散されました。'
         try {
           const parsed = JSON.parse(event.data) as { message?: string }
-          if (parsed.message) message = parsed.message
-        } catch {
+          if (parsed.message)
+            message = parsed.message
+        }
+        catch {
           // ignore
         }
         this.stop()
@@ -90,13 +92,13 @@ export class SseClient {
         this.options.onError(message ?? 'サーバーでエラーが発生しました。')
       })
 
-
       eventSource.addEventListener('ping', (event: MessageEvent) => {
         let ts: number | undefined
         try {
           const parsed = JSON.parse(event.data) as { timestamp?: number }
           ts = parsed.timestamp
-        } catch {
+        }
+        catch {
           // ignore
         }
         this.options.onPing?.(ts)
@@ -112,7 +114,8 @@ export class SseClient {
         this.options.onError('通信が切断されました。再接続を試みます。')
         this.scheduleReconnect()
       }
-    } catch (err) {
+    }
+    catch {
       this.options.onError('接続を開始できませんでした。')
       this.scheduleReconnect()
     }
@@ -123,10 +126,12 @@ export class SseClient {
       const payload = JSON.parse(rawData) as SsePayload
       if (payload.event === 'initial') {
         this.options.onInitial(payload.gameState, payload.notice, payload.timestamp)
-      } else if (payload.event === 'update') {
+      }
+      else if (payload.event === 'update') {
         this.options.onUpdate(payload.gameState, payload.notice, payload.timestamp)
       }
-    } catch {
+    }
+    catch {
       this.options.onError('受信したデータを解析できませんでした。')
     }
   }
@@ -135,14 +140,17 @@ export class SseClient {
     try {
       const parsed = JSON.parse(rawData) as { message?: string }
       return parsed.message ?? null
-    } catch {
+    }
+    catch {
       return null
     }
   }
 
   private scheduleReconnect(): void {
-    if (this.stopped) return
-    if (this.reconnectTimer) return
+    if (this.stopped)
+      return
+    if (this.reconnectTimer)
+      return
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null

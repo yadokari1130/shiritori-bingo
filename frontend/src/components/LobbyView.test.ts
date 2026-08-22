@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import type { GameState } from '../types'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import LobbyView from './LobbyView.vue'
-import ConfirmModal from './ConfirmModal.vue'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useGameStore } from '../store/game'
-import { createDefaultSettings, type GameState } from '../types'
+import { createDefaultSettings } from '../types'
+import ConfirmModal from './ConfirmModal.vue'
+import LobbyView from './LobbyView.vue'
 
 function createLobbyState(overrides: Partial<GameState> = {}): GameState {
   return {
@@ -60,7 +61,7 @@ function createLobbyState(overrides: Partial<GameState> = {}): GameState {
   }
 }
 
-describe('LobbyView', () => {
+describe('lobbyView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     document.body.innerHTML = ''
@@ -81,7 +82,7 @@ describe('LobbyView', () => {
           mode: 'team',
           teamCount: 3,
         },
-      })
+      }),
     )
 
     const wrapper = mount(LobbyView, {
@@ -90,7 +91,7 @@ describe('LobbyView', () => {
     expect(document.body.querySelector('.rule-modal-backdrop')).toBeNull()
 
     // ルール説明ボタンをクリック
-    const ruleBtn = wrapper.findAll('button').find((b) => b.text().includes('ルール説明'))
+    const ruleBtn = wrapper.findAll('button').find(b => b.text().includes('ルール説明'))
     expect(ruleBtn).toBeDefined()
     await ruleBtn!.trigger('click')
 
@@ -111,7 +112,7 @@ describe('LobbyView', () => {
     const modalWrapper = mount(ConfirmModal, { attachTo: document.body })
     const hostWrapper = mount(LobbyView, { attachTo: document.body })
 
-    const dissolveButton = hostWrapper.findAll('button').find((b) => b.text().includes('部屋を解散'))
+    const dissolveButton = hostWrapper.findAll('button').find(b => b.text().includes('部屋を解散'))
     expect(dissolveButton).toBeDefined()
     await dissolveButton!.trigger('click')
     await modalWrapper.vm.$nextTick()
@@ -140,7 +141,7 @@ describe('LobbyView', () => {
     const modalWrapper = mount(ConfirmModal, { attachTo: document.body })
     const hostWrapper = mount(LobbyView, { attachTo: document.body })
 
-    const changeHostBtn = hostWrapper.findAll('button').find((b) => b.text().includes('親にする'))
+    const changeHostBtn = hostWrapper.findAll('button').find(b => b.text().includes('親にする'))
     expect(changeHostBtn).toBeDefined()
     await changeHostBtn!.trigger('click')
     await modalWrapper.vm.$nextTick()
@@ -169,7 +170,7 @@ describe('LobbyView', () => {
     const modalWrapper = mount(ConfirmModal, { attachTo: document.body })
     const hostWrapper = mount(LobbyView, { attachTo: document.body })
 
-    const kickBtn = hostWrapper.findAll('button').find((b) => b.text().trim() === '退出')
+    const kickBtn = hostWrapper.findAll('button').find(b => b.text().trim() === '退出')
     expect(kickBtn).toBeDefined()
     await kickBtn!.trigger('click')
     await modalWrapper.vm.$nextTick()
@@ -198,7 +199,7 @@ describe('LobbyView', () => {
     const modalWrapper = mount(ConfirmModal, { attachTo: document.body })
     const guestWrapper = mount(LobbyView, { attachTo: document.body })
 
-    const leaveBtn = guestWrapper.findAll('button').find((b) => b.text().includes('トップに戻る'))
+    const leaveBtn = guestWrapper.findAll('button').find(b => b.text().includes('トップに戻る'))
     expect(leaveBtn).toBeDefined()
     await leaveBtn!.trigger('click')
     await modalWrapper.vm.$nextTick()

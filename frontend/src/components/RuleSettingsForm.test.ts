@@ -2,10 +2,10 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
-import RuleSettingsForm from './RuleSettingsForm.vue'
 import { createDefaultSettings } from '../types'
+import RuleSettingsForm from './RuleSettingsForm.vue'
 
-describe('RuleSettingsForm', () => {
+describe('ruleSettingsForm', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()

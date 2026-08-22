@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import type { BingoCard, Cell } from '../types'
+import { describe, expect, it } from 'vitest'
 import {
   buildCharOpenStateColumns,
   calculateReachCells,
@@ -100,8 +100,8 @@ describe('bingo ユーティリティ', () => {
         dakuten: true,
         handakuten: true,
       })
-      expect(columns.some((c) => c.header === 'が')).toBe(true)
-      expect(columns.some((c) => c.header === 'ぱ')).toBe(true)
+      expect(columns.some(c => c.header === 'が')).toBe(true)
+      expect(columns.some(c => c.header === 'ぱ')).toBe(true)
     })
   })
 

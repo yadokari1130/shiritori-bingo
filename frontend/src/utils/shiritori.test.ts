@@ -176,7 +176,7 @@ describe('shiritori ユーティリティ', () => {
         expect(validateWordForFrontend('うみ', { requiredStartChar: 'ゔ' }).valid).toBe(true)
       })
 
-      it('Unicode 結合文字（NFD）でも正しく判定される', () => {
+      it('unicode 結合文字（NFD）でも正しく判定される', () => {
         // 'は' + U+309A (半濁点) -> 'ぱ'
         const nfdPanda = 'は\u309Aんだ'
         expect(validateWordForFrontend(nfdPanda, { requiredStartChar: 'は' }).valid).toBe(true)

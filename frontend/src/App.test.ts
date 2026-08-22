@@ -6,7 +6,7 @@ import App from './App.vue'
 import { useGameStore } from './store/game'
 import { createDefaultSettings } from './types'
 
-describe('App', () => {
+describe('app', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })

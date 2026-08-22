@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-import { useGameStore } from './store/game'
 import * as api from './api'
-import TopView from './components/TopView.vue'
+import ConfirmModal from './components/ConfirmModal.vue'
 import LobbyView from './components/LobbyView.vue'
 import PlayingView from './components/PlayingView.vue'
 import ResultView from './components/ResultView.vue'
-import ConfirmModal from './components/ConfirmModal.vue'
+import TopView from './components/TopView.vue'
+import { useGameStore } from './store/game'
 
 const store = useGameStore()
 
@@ -73,4 +73,3 @@ onUnmounted(() => {
   min-height: 100vh;
 }
 </style>
-

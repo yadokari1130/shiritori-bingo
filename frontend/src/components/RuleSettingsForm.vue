@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { Settings } from '../types'
 import { computed, ref, watch } from 'vue'
 import { usePresets } from '../composables/usePresets'
-import { createDefaultSettings, type Settings } from '../types'
+import { createDefaultSettings } from '../types'
 import { buildCardCharPool, maxCardSize } from '../utils/shiritori'
 
 const props = withDefaults(
@@ -59,41 +60,56 @@ const maxSize = computed(() => maxCardSize(cardCharPool.value))
 // バリデーション
 const cardSizeError = computed(() => {
   const s = draft.value.cardSize
-  if (Number.isNaN(s) || s === null || s === undefined) return '数値を入力してください。'
-  if (s < 3) return '3以上を指定してください。'
-  if (s % 2 === 0) return '奇数を指定してください。'
-  if (s > maxSize.value) return `最大${maxSize.value}までです（現在の候補文字数: ${cardCharPool.value.length}）。`
+  if (Number.isNaN(s) || s === null || s === undefined)
+    return '数値を入力してください。'
+  if (s < 3)
+    return '3以上を指定してください。'
+  if (s % 2 === 0)
+    return '奇数を指定してください。'
+  if (s > maxSize.value)
+    return `最大${maxSize.value}までです（現在の候補文字数: ${cardCharPool.value.length}）。`
   return ''
 })
 
 const targetBingosError = computed(() => {
-  if (draft.value.endCondition !== 'bingos') return ''
+  if (draft.value.endCondition !== 'bingos')
+    return ''
   const max = draft.value.cardSize * 2 + 2
   const b = draft.value.targetBingos
-  if (Number.isNaN(b) || b < 1 || b > max) return `1〜${max}の範囲で指定してください。`
+  if (Number.isNaN(b) || b < 1 || b > max)
+    return `1〜${max}の範囲で指定してください。`
   return ''
 })
 
 const wordLengthError = computed(() => {
   const min = draft.value.minWordLength
   const max = draft.value.maxWordLength
-  if (min !== null && (!Number.isInteger(min) || min < 1)) return '最小文字数は1以上の整数で指定してください。'
-  if (max !== null && (!Number.isInteger(max) || max < 1)) return '最大文字数は1以上の整数で指定してください。'
-  if (min !== null && max !== null && min > max) return '最小文字数は最大文字数以下で指定してください。'
+  if (min !== null && (!Number.isInteger(min) || min < 1))
+    return '最小文字数は1以上の整数で指定してください。'
+  if (max !== null && (!Number.isInteger(max) || max < 1))
+    return '最大文字数は1以上の整数で指定してください。'
+  if (min !== null && max !== null && min > max)
+    return '最小文字数は最大文字数以下で指定してください。'
   return ''
 })
 
 const isInvalid = computed(() => {
-  if (cardSizeError.value || targetBingosError.value || wordLengthError.value) return true
-  if (draft.value.endCondition === 'turns' && (Number.isNaN(draft.value.targetTurns) || draft.value.targetTurns < 1)) return true
-  if (draft.value.mode === 'team' && (Number.isNaN(draft.value.teamCount) || draft.value.teamCount < 2)) return true
-  if (Number.isNaN(draft.value.timeLimitSeconds) || draft.value.timeLimitSeconds < 1) return true
-  if (Number.isNaN(draft.value.extraTimeSeconds) || draft.value.extraTimeSeconds < 0) return true
+  if (cardSizeError.value || targetBingosError.value || wordLengthError.value)
+    return true
+  if (draft.value.endCondition === 'turns' && (Number.isNaN(draft.value.targetTurns) || draft.value.targetTurns < 1))
+    return true
+  if (draft.value.mode === 'team' && (Number.isNaN(draft.value.teamCount) || draft.value.teamCount < 2))
+    return true
+  if (Number.isNaN(draft.value.timeLimitSeconds) || draft.value.timeLimitSeconds < 1)
+    return true
+  if (Number.isNaN(draft.value.extraTimeSeconds) || draft.value.extraTimeSeconds < 0)
+    return true
   return false
 })
 
 function onSubmit(): void {
-  if (isInvalid.value || props.isSubmitting || props.submitDisabled) return
+  if (isInvalid.value || props.isSubmitting || props.submitDisabled)
+    return
   emit('submit')
 }
 
@@ -112,13 +128,15 @@ function applyPreset(presetId: string): void {
 
 function onSavePreset(): void {
   const name = presetName.value.trim()
-  if (!name) return
+  if (!name)
+    return
   if (selectedPresetId.value) {
     presets.updatePreset(selectedPresetId.value, name, {
       ...draft.value,
       cardOptions: { ...draft.value.cardOptions },
     })
-  } else {
+  }
+  else {
     const preset = presets.addPreset(name, {
       ...draft.value,
       cardOptions: { ...draft.value.cardOptions },
@@ -149,7 +167,7 @@ function onSelectPresetToEdit(presetId: string): void {
       cardOptions: { ...settings.cardOptions },
     }
     selectedPresetId.value = presetId
-    presetName.value = presets.presets.value.find((p) => p.id === presetId)?.name ?? ''
+    presetName.value = presets.presets.value.find(p => p.id === presetId)?.name ?? ''
     showPresetMenu.value = false
     updateDraft()
   }
@@ -161,7 +179,9 @@ function onSelectPresetToEdit(presetId: string): void {
     <form class="settings-form" @submit.prevent="onSubmit">
       <!-- モード設定 -->
       <fieldset class="panel-fieldset">
-        <legend class="panel-legend">モード設定</legend>
+        <legend class="panel-legend">
+          モード設定
+        </legend>
         <div class="field-grid">
           <div class="field">
             <label for="gameMode" class="field-label">対戦モード</label>
@@ -171,8 +191,12 @@ function onSelectPresetToEdit(presetId: string): void {
               class="text-input select-input"
               @change="updateDraft"
             >
-              <option value="individual">個人戦</option>
-              <option value="team">チーム戦</option>
+              <option value="individual">
+                個人戦
+              </option>
+              <option value="team">
+                チーム戦
+              </option>
             </select>
           </div>
           <div v-if="draft.mode === 'team'" class="field">
@@ -191,7 +215,9 @@ function onSelectPresetToEdit(presetId: string): void {
 
       <!-- カード設定 -->
       <fieldset class="panel-fieldset">
-        <legend class="panel-legend">カード設定</legend>
+        <legend class="panel-legend">
+          カード設定
+        </legend>
         <div class="field-grid">
           <div class="field">
             <label for="cardSize" class="field-label">カードサイズ</label>
@@ -204,7 +230,9 @@ function onSelectPresetToEdit(presetId: string): void {
               class="number-input"
               @input="updateDraft"
             >
-            <p v-if="cardSizeError" class="notice error mt-1">{{ cardSizeError }}</p>
+            <p v-if="cardSizeError" class="notice error mt-1">
+              {{ cardSizeError }}
+            </p>
             <p v-else class="field-note">
               3以上の奇数。中央がFREEマスになります。（最大{{ maxSize }}マス / 候補文字数: {{ cardCharPool.length }}）
             </p>
@@ -281,14 +309,20 @@ function onSelectPresetToEdit(presetId: string): void {
               </span>
             </label>
           </div>
-          <p class="help-note">基本の清音は常に含まれます。除外した文字も単語入力には使用できます。</p>
+          <p class="help-note">
+            基本の清音は常に含まれます。除外した文字も単語入力には使用できます。
+          </p>
         </div>
       </fieldset>
 
       <!-- 終了条件 -->
       <fieldset class="panel-fieldset">
-        <legend class="panel-legend">終了条件</legend>
-        <p class="fieldset-note">選択した条件の目標値だけ入力できます。判定は現在のターンを終えてから行います。</p>
+        <legend class="panel-legend">
+          終了条件
+        </legend>
+        <p class="fieldset-note">
+          選択した条件の目標値だけ入力できます。判定は現在のターンを終えてから行います。
+        </p>
         <div class="radio-stack mt-2">
           <div class="radio-row">
             <label class="radio-option">
@@ -341,13 +375,17 @@ function onSelectPresetToEdit(presetId: string): void {
               @input="updateDraft"
             >
           </div>
-          <p v-if="targetBingosError" class="notice error mt-1">{{ targetBingosError }}</p>
+          <p v-if="targetBingosError" class="notice error mt-1">
+            {{ targetBingosError }}
+          </p>
         </div>
       </fieldset>
 
       <!-- 時間設定 -->
       <fieldset class="panel-fieldset">
-        <legend class="panel-legend">時間設定</legend>
+        <legend class="panel-legend">
+          時間設定
+        </legend>
         <div class="field-grid">
           <div class="field">
             <label for="timeLimitSeconds" class="field-label">制限時間（秒）</label>
@@ -388,7 +426,9 @@ function onSelectPresetToEdit(presetId: string): void {
 
       <!-- 無効入力の扱い -->
       <fieldset class="panel-fieldset">
-        <legend class="panel-legend">無効入力の扱い</legend>
+        <legend class="panel-legend">
+          無効入力の扱い
+        </legend>
         <div class="field-grid">
           <label class="check-option">
             <input
@@ -421,7 +461,9 @@ function onSelectPresetToEdit(presetId: string): void {
 
       <!-- エクストラルール -->
       <details class="extra-settings">
-        <summary class="panel-fieldset panel-legend">エクストラルール</summary>
+        <summary class="panel-fieldset panel-legend">
+          エクストラルール
+        </summary>
         <div class="extra-settings-body">
           <div class="field">
             <label class="check-option">
@@ -436,7 +478,9 @@ function onSelectPresetToEdit(presetId: string): void {
               </span>
             </label>
           </div>
-          <p class="fieldset-note mt-3">単語の文字数を制限できます。設定した範囲外の単語は無効入力として扱います。</p>
+          <p class="fieldset-note mt-3">
+            単語の文字数を制限できます。設定した範囲外の単語は無効入力として扱います。
+          </p>
           <div class="field-grid mt-2">
             <div class="field">
               <label for="minWordLength" class="field-label">最小文字数</label>
@@ -483,13 +527,17 @@ function onSelectPresetToEdit(presetId: string): void {
               </div>
             </div>
           </div>
-          <p v-if="wordLengthError" class="notice error mt-1">{{ wordLengthError }}</p>
+          <p v-if="wordLengthError" class="notice error mt-1">
+            {{ wordLengthError }}
+          </p>
         </div>
       </details>
 
       <!-- プリセット管理 -->
       <fieldset class="panel-fieldset">
-        <legend class="panel-legend">設定プリセット</legend>
+        <legend class="panel-legend">
+          設定プリセット
+        </legend>
         <div class="field">
           <label for="presetName" class="field-label">プリセット名</label>
           <input
@@ -705,9 +753,19 @@ function onSelectPresetToEdit(presetId: string): void {
   padding: 12px 24px;
 }
 
-.mt-1 { margin-top: 4px; }
-.mt-2 { margin-top: 8px; }
-.mt-3 { margin-top: 12px; }
-.mt-4 { margin-top: 16px; }
-.p-3 { padding: 12px; }
+.mt-1 {
+  margin-top: 4px;
+}
+.mt-2 {
+  margin-top: 8px;
+}
+.mt-3 {
+  margin-top: 12px;
+}
+.mt-4 {
+  margin-top: 16px;
+}
+.p-3 {
+  padding: 12px;
+}
 </style>

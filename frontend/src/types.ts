@@ -247,7 +247,8 @@ export function createDefaultSettings(): Settings {
 
 /** GameStateから表示フェーズを判定する */
 export function resolveViewFromPhase(state: GameState | null): ViewPhase {
-  if (!state) return 'top'
+  if (!state)
+    return 'top'
   switch (state.phase) {
     case 'setup':
       return 'lobby'
@@ -259,5 +260,3 @@ export function resolveViewFromPhase(state: GameState | null): ViewPhase {
       return 'top'
   }
 }
-
-

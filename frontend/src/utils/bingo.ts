@@ -66,15 +66,15 @@ export function generateBingoLines(size: number): BingoLine[] {
 
 /** 指定したインデックス集合がすべて開いているか */
 function isLineComplete(cells: Cell[], indexes: number[]): boolean {
-  return indexes.every((idx) => cells[idx]?.isOpen === true)
+  return indexes.every(idx => cells[idx]?.isOpen === true)
 }
 
 /** 現在成立しているビンゴ列の ID 一覧を返す */
 export function getCompletedLineIds(card: BingoCard): string[] {
   const lines = generateBingoLines(card.size)
   return lines
-    .filter((line) => isLineComplete(card.cells, line.indexes))
-    .map((line) => line.id)
+    .filter(line => isLineComplete(card.cells, line.indexes))
+    .map(line => line.id)
 }
 
 /**
@@ -90,7 +90,8 @@ export function calculateReachCells(card: BingoCard): {
   const reachHighlightIndexes = new Set<number>()
 
   for (const line of lines) {
-    if (isLineComplete(card.cells, line.indexes)) continue
+    if (isLineComplete(card.cells, line.indexes))
+      continue
 
     const closedIndexes: number[] = []
     for (const idx of line.indexes) {
@@ -103,7 +104,8 @@ export function calculateReachCells(card: BingoCard): {
       const idx = closedIndexes[0]
       if (reachIndexes.has(idx)) {
         reachHighlightIndexes.add(idx)
-      } else {
+      }
+      else {
         reachIndexes.add(idx)
       }
     }
@@ -125,8 +127,8 @@ export function buildCellFlags(
   return card.cells.map((cell, index) => {
     const isPreview = !cell.isOpen && previewChars.includes(cell.char)
     const lineIds = generateBingoLines(card.size)
-      .filter((line) => line.indexes.includes(index) && completedLineIds.includes(line.id))
-      .map((line) => line.id)
+      .filter(line => line.indexes.includes(index) && completedLineIds.includes(line.id))
+      .map(line => line.id)
 
     return {
       isOpen: cell.isOpen,
@@ -235,7 +237,7 @@ export function collectOpenedChars(cards: BingoCard[]): Set<string> {
 
 /** 指定したカードの開いたマス数を数える */
 export function countOpenedCells(card: BingoCard): number {
-  return card.cells.filter((cell) => cell.isOpen).length
+  return card.cells.filter(cell => cell.isOpen).length
 }
 
 /** 指定したカードのビンゴ数を数える */

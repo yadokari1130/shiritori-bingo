@@ -4,13 +4,13 @@
  * 仕様書 9. データモデル・状態遷移、10. UIUX・画面遷移、14. 通信・同期仕様 に基づく。
  */
 
+import type { ConnectionStatus, GameState, Settings, ViewPhase } from '../types'
+
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { GameState, Settings, ViewPhase } from '../types'
-import { createDefaultSettings } from '../types'
 import * as api from '../api'
 import { SseClient } from '../sse'
-import type { ConnectionStatus } from '../types'
+import { createDefaultSettings } from '../types'
 
 export const useGameStore = defineStore('game', () => {
   // 画面状態
@@ -38,7 +38,7 @@ export const useGameStore = defineStore('game', () => {
   // 補助モード設定（localStorage永続化）
   const ASSIST_STORAGE_KEY = 'shiritori-bingo:assist-mode'
   const assistMode = ref<boolean>(
-    typeof localStorage !== 'undefined' && localStorage.getItem(ASSIST_STORAGE_KEY) === 'true'
+    typeof localStorage !== 'undefined' && localStorage.getItem(ASSIST_STORAGE_KEY) === 'true',
   )
   const wordSuggestions = ref<string[]>([])
 
@@ -49,12 +49,14 @@ export const useGameStore = defineStore('game', () => {
   const phase = computed(() => gameState.value?.phase ?? 'setup')
 
   const myPlayer = computed(() => {
-    if (!myPlayerId.value || !gameState.value) return null
-    return gameState.value.players.find((p) => p.id === myPlayerId.value) ?? null
+    if (!myPlayerId.value || !gameState.value)
+      return null
+    return gameState.value.players.find(p => p.id === myPlayerId.value) ?? null
   })
 
   const isHost = computed(() => {
-    if (!myPlayerId.value || !gameState.value) return false
+    if (!myPlayerId.value || !gameState.value)
+      return false
     return gameState.value.hostPlayerId === myPlayerId.value && !myPlayer.value?.isCpu
   })
 
@@ -63,35 +65,42 @@ export const useGameStore = defineStore('game', () => {
   })
 
   const currentSubjectName = computed(() => {
-    if (!gameState.value) return ''
+    if (!gameState.value)
+      return ''
     if (gameState.value.settings.mode === 'individual' && gameState.value.currentPlayerId) {
-      const p = gameState.value.players.find((pl) => pl.id === gameState.value!.currentPlayerId)
+      const p = gameState.value.players.find(pl => pl.id === gameState.value!.currentPlayerId)
       return p?.name ?? ''
     }
     if (gameState.value.settings.mode === 'team' && gameState.value.currentTeamId) {
-      const idx = gameState.value.teams.findIndex((t) => t.id === gameState.value!.currentTeamId)
+      const idx = gameState.value.teams.findIndex(t => t.id === gameState.value!.currentTeamId)
       return idx >= 0 ? `チーム ${idx + 1}` : ''
     }
     return ''
   })
 
   const isCurrentSubjectCpu = computed(() => {
-    if (!gameState.value || gameState.value.phase !== 'playing') return false
+    if (!gameState.value || gameState.value.phase !== 'playing')
+      return false
     if (gameState.value.settings.mode === 'individual') {
-      const p = gameState.value.players.find((pl) => pl.id === gameState.value!.currentPlayerId)
+      const p = gameState.value.players.find(pl => pl.id === gameState.value!.currentPlayerId)
       return !!p?.isCpu
-    } else {
-      const t = gameState.value.teams.find((tm) => tm.id === gameState.value!.currentTeamId)
-      if (!t) return false
-      const members = gameState.value.players.filter((p) => t.memberPlayerIds.includes(p.id))
-      return members.length > 0 && members.every((m) => m.isCpu)
+    }
+    else {
+      const t = gameState.value.teams.find(tm => tm.id === gameState.value!.currentTeamId)
+      if (!t)
+        return false
+      const members = gameState.value.players.filter(p => t.memberPlayerIds.includes(p.id))
+      return members.length > 0 && members.every(m => m.isCpu)
     }
   })
 
   const canInput = computed(() => {
-    if (!gameState.value || gameState.value.phase !== 'playing') return false
-    if (!myPlayerId.value || !myPlayer.value) return false
-    if (isCurrentSubjectCpu.value) return false
+    if (!gameState.value || gameState.value.phase !== 'playing')
+      return false
+    if (!myPlayerId.value || !myPlayer.value)
+      return false
+    if (isCurrentSubjectCpu.value)
+      return false
 
     if (gameState.value.settings.mode === 'individual') {
       return gameState.value.currentPlayerId === myPlayerId.value
@@ -99,28 +108,32 @@ export const useGameStore = defineStore('game', () => {
 
     // チーム戦：現在チームのメンバーなら入力可能
     const teamId = gameState.value.currentTeamId
-    if (!teamId) return false
+    if (!teamId)
+      return false
     return myPlayer.value.teamId === teamId
   })
 
   const canUndo = computed(() => {
-    if (!isHost.value || gameState.value?.phase !== 'playing') return false
+    if (!isHost.value || gameState.value?.phase !== 'playing')
+      return false
     return (gameState.value.undoHistory?.length ?? 0) > 0 || (gameState.value.wordHistory?.length ?? 0) > 0
   })
 
   const orderedPlayers = computed(() => {
-    if (!gameState.value) return []
+    if (!gameState.value)
+      return []
     const order = gameState.value.playOrder
     return order
-      .map((id) => gameState.value!.players.find((p) => p.id === id))
+      .map(id => gameState.value!.players.find(p => p.id === id))
       .filter((p): p is NonNullable<typeof p> => p !== undefined)
   })
 
   const orderedTeams = computed(() => {
-    if (!gameState.value) return []
+    if (!gameState.value)
+      return []
     const order = gameState.value.playOrder
     return order
-      .map((id) => gameState.value!.teams.find((t) => t.id === id))
+      .map(id => gameState.value!.teams.find(t => t.id === id))
       .filter((t): t is NonNullable<typeof t> => t !== undefined)
   })
 
@@ -158,20 +171,20 @@ export const useGameStore = defineStore('game', () => {
     }
 
     // 参加していたプレイヤーが削除された（強制退出させられた等）場合
-    if (myPlayerId.value && !state.players.some((p) => p.id === myPlayerId.value)) {
+    if (myPlayerId.value && !state.players.some(p => p.id === myPlayerId.value)) {
       goToTop()
       errorMessage.value = 'ルームから退出させられました。'
       return
     }
 
-    const isTurnChanged =
-      gameState.value &&
-      gameState.value.phase === 'playing' &&
-      state.phase === 'playing' &&
-      (gameState.value.currentPlayerId !== state.currentPlayerId ||
-        gameState.value.currentTeamId !== state.currentTeamId ||
-        gameState.value.round !== state.round ||
-        gameState.value.orderIndex !== state.orderIndex)
+    const isTurnChanged
+      = gameState.value
+        && gameState.value.phase === 'playing'
+        && state.phase === 'playing'
+        && (gameState.value.currentPlayerId !== state.currentPlayerId
+          || gameState.value.currentTeamId !== state.currentTeamId
+          || gameState.value.round !== state.round
+          || gameState.value.orderIndex !== state.orderIndex)
 
     if (isTurnChanged) {
       assistMode.value = false
@@ -186,10 +199,12 @@ export const useGameStore = defineStore('game', () => {
     if (state.phase === 'playing' && assistMode.value) {
       if (state.assistSuggestions && state.assistSuggestions.length > 0) {
         wordSuggestions.value = state.assistSuggestions
-      } else {
+      }
+      else {
         void fetchWordSuggestions()
       }
-    } else if (state.phase !== 'playing' || !assistMode.value) {
+    }
+    else if (state.phase !== 'playing' || !assistMode.value) {
       wordSuggestions.value = []
     }
     if (notice) {
@@ -227,7 +242,8 @@ export const useGameStore = defineStore('game', () => {
         noticeMessage.value = message
       },
       onPing: (timestamp) => {
-        if (timestamp) updateServerTimeOffset(timestamp)
+        if (timestamp)
+          updateServerTimeOffset(timestamp)
       },
 
       onConnectionChange: (connected) => {
@@ -258,7 +274,8 @@ export const useGameStore = defineStore('game', () => {
       if (typeof window !== 'undefined') {
         window.history.pushState(null, '', `/game/${res.roomId}`)
       }
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : 'ルームを作成できませんでした。'
       throw err
     }
@@ -279,14 +296,17 @@ export const useGameStore = defineStore('game', () => {
       if (typeof window !== 'undefined' && window.location.pathname !== `/game/${targetRoomId}`) {
         window.history.pushState(null, '', `/game/${targetRoomId}`)
       }
-    } catch (err) {
+    }
+    catch (err) {
       if (err instanceof api.ApiError) {
         if (err.status === 404) {
           errorMessage.value = 'ルームが見つかりません。'
-        } else {
+        }
+        else {
           errorMessage.value = err.message || 'ルームに参加できませんでした。'
         }
-      } else {
+      }
+      else {
         errorMessage.value = 'ルームに参加できませんでした。'
       }
       throw err
@@ -296,12 +316,14 @@ export const useGameStore = defineStore('game', () => {
   /** 名前を変更する */
   async function updateName(name: string): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.updateName(id, name)
       applyGameState(res.gameState)
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : '名前を変更できませんでした。'
       throw err
     }
@@ -310,13 +332,15 @@ export const useGameStore = defineStore('game', () => {
   /** ルール設定を反映する */
   async function updateSettings(settings: Settings): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.updateSettings(id, settings)
       applyGameState(res.gameState)
       draftSettings.value = { ...settings }
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : '設定を反映できませんでした。'
       throw err
     }
@@ -325,12 +349,14 @@ export const useGameStore = defineStore('game', () => {
   /** ゲームを開始する */
   async function startGame(settings?: Settings): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.startGame(id, settings)
       applyGameState(res.gameState)
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : 'ゲームを開始できませんでした。'
       throw err
     }
@@ -339,12 +365,14 @@ export const useGameStore = defineStore('game', () => {
   /** 親を変更する */
   async function changeHost(newHostPlayerId: string): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.changeHost(id, newHostPlayerId)
       applyGameState(res.gameState, '親が変更されました。')
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : '親を変更できませんでした。'
       throw err
     }
@@ -353,12 +381,14 @@ export const useGameStore = defineStore('game', () => {
   /** 参加者を強制退出させる（親のみ） */
   async function kickPlayer(targetPlayerId: string): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.kickPlayer(id, targetPlayerId)
       applyGameState(res.gameState)
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : '参加者を退出させられませんでした。'
       throw err
     }
@@ -367,12 +397,14 @@ export const useGameStore = defineStore('game', () => {
   /** チームを選択する */
   async function selectTeam(teamId: string | null): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.selectTeam(id, teamId)
       applyGameState(res.gameState)
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : 'チームを変更できませんでした。'
       throw err
     }
@@ -381,12 +413,14 @@ export const useGameStore = defineStore('game', () => {
   /** 未所属者を均等に振り分ける */
   async function randomizeTeams(): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.randomizeTeams(id)
       applyGameState(res.gameState)
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : 'チーム分けできませんでした。'
       throw err
     }
@@ -395,12 +429,14 @@ export const useGameStore = defineStore('game', () => {
   /** 単語を確定する */
   async function submitWord(word: string): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.submitWord(id, word)
       applyGameState(res.gameState)
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : '送信できませんでした。'
       throw err
     }
@@ -409,12 +445,14 @@ export const useGameStore = defineStore('game', () => {
   /** スキップを適用する（親のみ） */
   async function submitSkip(subjectId: string): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.submitSkip(id, subjectId)
       applyGameState(res.gameState)
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : 'スキップできませんでした。'
       throw err
     }
@@ -423,12 +461,14 @@ export const useGameStore = defineStore('game', () => {
   /** 失格を適用する（親のみ） */
   async function submitDisqualify(subjectId: string): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.submitDisqualify(id, subjectId)
       applyGameState(res.gameState)
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : '失格にできませんでした。'
       throw err
     }
@@ -437,12 +477,14 @@ export const useGameStore = defineStore('game', () => {
   /** undo を実行する（親のみ） */
   async function submitUndo(): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.submitUndo(id)
       applyGameState(res.gameState, '直前の操作を取り消しました。')
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : 'undo できませんでした。'
       throw err
     }
@@ -451,24 +493,27 @@ export const useGameStore = defineStore('game', () => {
   /** ゲーム終了後にロビーへ戻す（親のみ） */
   async function returnToLobby(): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.returnToLobby(id)
       applyGameState(res.gameState)
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : 'ロビーに戻れませんでした。'
       throw err
     }
   }
 
   /** ルーム情報を確認する */
-  async function checkRoomInfo(targetRoomId: string): Promise<{ exists: boolean; hasPassword: boolean }> {
+  async function checkRoomInfo(targetRoomId: string): Promise<{ exists: boolean, hasPassword: boolean }> {
     errorMessage.value = null
     try {
       const info = await api.fetchRoomInfo(targetRoomId)
       return { exists: true, hasPassword: info.hasPassword }
-    } catch (err) {
+    }
+    catch (err) {
       if (err instanceof api.ApiError && err.status === 404) {
         return { exists: false, hasPassword: false }
       }
@@ -483,7 +528,8 @@ export const useGameStore = defineStore('game', () => {
     try {
       await joinRoom(targetRoomId, '')
       return true
-    } catch (err) {
+    }
+    catch (err) {
       if (err instanceof api.ApiError && (err.status === 400 || err.status === 403 || err.status === 404)) {
         clearError()
         return false
@@ -492,19 +538,21 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-
   /** 専用URLを開いたとき、再接続Cookieで参加者を復元する */
   async function restoreRoomFromUrl(): Promise<boolean> {
     const parts = window.location.pathname.split('/').filter(Boolean)
-    if (parts.length !== 2 || parts[0] !== 'game' || !parts[1]) return false
+    if (parts.length !== 2 || parts[0] !== 'game' || !parts[1])
+      return false
 
     const targetRoomId = parts[1]
     isRestoringRoom.value = true
     try {
       return await tryReconnect(targetRoomId)
-    } catch {
+    }
+    catch {
       return false
-    } finally {
+    }
+    finally {
       isRestoringRoom.value = false
     }
   }
@@ -532,7 +580,8 @@ export const useGameStore = defineStore('game', () => {
     if (id && myPlayer.value) {
       try {
         await api.leaveRoom(id)
-      } catch {
+      }
+      catch {
         // 退出APIエラー時もトップ画面への離脱は優先
       }
     }
@@ -542,13 +591,15 @@ export const useGameStore = defineStore('game', () => {
   /** 部屋を解散してトップ画面へ戻る（親のみ） */
   async function dissolveRoom(): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       await api.deleteRoom(id)
       goToTop()
       noticeMessage.value = '部屋を解散しました。'
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : '部屋を解散できませんでした。'
       throw err
     }
@@ -563,10 +614,12 @@ export const useGameStore = defineStore('game', () => {
     if (enabled && gameState.value?.phase === 'playing') {
       if (gameState.value.assistSuggestions && gameState.value.assistSuggestions.length > 0) {
         wordSuggestions.value = gameState.value.assistSuggestions
-      } else {
+      }
+      else {
         void fetchWordSuggestions()
       }
-    } else {
+    }
+    else {
       wordSuggestions.value = []
     }
   }
@@ -574,7 +627,8 @@ export const useGameStore = defineStore('game', () => {
   /** 補助モード用：単語推薦の取得 */
   async function fetchWordSuggestions(): Promise<void> {
     const id = roomId.value
-    if (!id || !assistMode.value) return
+    if (!id || !assistMode.value)
+      return
     if (gameState.value?.assistSuggestions && gameState.value.assistSuggestions.length > 0) {
       wordSuggestions.value = gameState.value.assistSuggestions
       return
@@ -582,7 +636,8 @@ export const useGameStore = defineStore('game', () => {
     try {
       const res = await api.fetchWordSuggestions(id)
       wordSuggestions.value = res.suggestions
-    } catch {
+    }
+    catch {
       wordSuggestions.value = []
     }
   }
@@ -590,12 +645,14 @@ export const useGameStore = defineStore('game', () => {
   /** CPUプレイヤーを追加する（親のみ） */
   async function addCpu(): Promise<void> {
     const id = roomId.value
-    if (!id) return
+    if (!id)
+      return
     errorMessage.value = null
     try {
       const res = await api.addCpu(id)
       applyGameState(res.gameState)
-    } catch (err) {
+    }
+    catch (err) {
       errorMessage.value = err instanceof api.ApiError ? err.message : 'CPUを追加できませんでした。'
       throw err
     }

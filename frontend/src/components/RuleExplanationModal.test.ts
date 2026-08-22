@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import RuleExplanationModal from './RuleExplanationModal.vue'
+import { describe, expect, it } from 'vitest'
 import { createDefaultSettings } from '../types'
+import RuleExplanationModal from './RuleExplanationModal.vue'
 
-describe('RuleExplanationModal', () => {
+describe('ruleExplanationModal', () => {
   it('modelValueがfalseの時は非表示である', () => {
     const wrapper = mount(RuleExplanationModal, {
       props: {
@@ -46,7 +46,7 @@ describe('RuleExplanationModal', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([false])
   })
 
-  it('Escapeキー押下でモーダルが閉じる', async () => {
+  it('escapeキー押下でモーダルが閉じる', async () => {
     const wrapper = mount(RuleExplanationModal, {
       props: {
         modelValue: true,

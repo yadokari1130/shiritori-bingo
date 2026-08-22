@@ -4,8 +4,8 @@
  * 仕様書 5.8, 9.1, 12.3 に基づく。
  */
 
-import { ref } from 'vue'
 import type { Preset, Settings } from '../types'
+import { ref } from 'vue'
 import { createDefaultSettings } from '../types'
 
 const STORAGE_KEY = 'shiritori-bingo-presets'
@@ -31,7 +31,8 @@ export function usePresets() {
       }
       const valid = parsed.filter(isValidPreset)
       presets.value = valid
-    } catch {
+    }
+    catch {
       loadError.value = 'プリセットの読み込みに失敗しました。'
       presets.value = []
     }
@@ -39,15 +40,16 @@ export function usePresets() {
 
   /** プリセットとして正しい形状か簡易検証する */
   function isValidPreset(value: unknown): value is Preset {
-    if (typeof value !== 'object' || value === null) return false
+    if (typeof value !== 'object' || value === null)
+      return false
     const p = value as Record<string, unknown>
     return (
-      typeof p.id === 'string' &&
-      typeof p.name === 'string' &&
-      typeof p.createdAt === 'number' &&
-      typeof p.updatedAt === 'number' &&
-      typeof p.settings === 'object' &&
-      p.settings !== null
+      typeof p.id === 'string'
+      && typeof p.name === 'string'
+      && typeof p.createdAt === 'number'
+      && typeof p.updatedAt === 'number'
+      && typeof p.settings === 'object'
+      && p.settings !== null
     )
   }
 
@@ -57,7 +59,8 @@ export function usePresets() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(presets.value))
       return true
-    } catch {
+    }
+    catch {
       saveError.value = 'プリセットを保存できませんでした。現在のゲームでは利用できます。'
       return false
     }
@@ -81,8 +84,9 @@ export function usePresets() {
 
   /** 既存プリセットを上書き保存する */
   function updatePreset(presetId: string, name: string, settings: Settings): boolean {
-    const index = presets.value.findIndex((p) => p.id === presetId)
-    if (index === -1) return false
+    const index = presets.value.findIndex(p => p.id === presetId)
+    if (index === -1)
+      return false
     presets.value[index] = {
       ...presets.value[index],
       name: name.trim(),
@@ -96,22 +100,24 @@ export function usePresets() {
   /** プリセットを削除する */
   function deletePreset(presetId: string): boolean {
     const before = presets.value.length
-    presets.value = presets.value.filter((p) => p.id !== presetId)
-    if (presets.value.length === before) return false
+    presets.value = presets.value.filter(p => p.id !== presetId)
+    if (presets.value.length === before)
+      return false
     savePresets()
     return true
   }
 
   /** プリセットを設定に適用する */
   function applyPreset(presetId: string): Settings | null {
-    const preset = presets.value.find((p) => p.id === presetId)
+    const preset = presets.value.find(p => p.id === presetId)
     return preset ? { ...preset.settings } : null
   }
 
   /** 現在の設定を複製して新しいプリセット名を提案する */
   function suggestPresetName(base = '新しいプリセット'): string {
-    const existing = presets.value.filter((p) => p.name.startsWith(base))
-    if (existing.length === 0) return base
+    const existing = presets.value.filter(p => p.name.startsWith(base))
+    if (existing.length === 0)
+      return base
     return `${base} (${existing.length + 1})`
   }
 
@@ -142,7 +148,8 @@ export function usePresets() {
  */
 export function sanitizeSettings(value: unknown): Settings {
   const defaults = createDefaultSettings()
-  if (typeof value !== 'object' || value === null) return defaults
+  if (typeof value !== 'object' || value === null)
+    return defaults
   const s = value as Partial<Settings>
 
   return {

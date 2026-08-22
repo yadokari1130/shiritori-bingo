@@ -1,9 +1,9 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import ConfirmModal from './ConfirmModal.vue'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useConfirm } from '../composables/useConfirm'
+import ConfirmModal from './ConfirmModal.vue'
 
-describe('ConfirmModal', () => {
+describe('confirmModal', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
   })
@@ -70,7 +70,7 @@ describe('ConfirmModal', () => {
     wrapper.unmount()
   })
 
-  it('Escapeキー押下でキャンセルされfalseを返す', async () => {
+  it('escapeキー押下でキャンセルされfalseを返す', async () => {
     const { showConfirm } = useConfirm()
     const wrapper = mount(ConfirmModal, { attachTo: document.body })
 

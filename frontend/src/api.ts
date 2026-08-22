@@ -26,9 +26,10 @@ async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = `HTTP ${res.status}`
     try {
-      const body = (await res.json()) as { message?: string; detail?: string }
+      const body = (await res.json()) as { message?: string, detail?: string }
       message = body.message ?? body.detail ?? message
-    } catch {
+    }
+    catch {
       // JSON でない場合はステータスコードのみ
     }
     throw new ApiError(message, res.status)
@@ -223,9 +224,10 @@ export async function leaveRoom(roomId: string): Promise<void> {
   if (!res.ok) {
     let message = `HTTP ${res.status}`
     try {
-      const body = (await res.json()) as { message?: string; detail?: string }
+      const body = (await res.json()) as { message?: string, detail?: string }
       message = body.message ?? body.detail ?? message
-    } catch {
+    }
+    catch {
       // ignore
     }
     throw new ApiError(message, res.status)
@@ -261,22 +263,23 @@ export async function deleteRoom(roomId: string): Promise<void> {
   if (!res.ok) {
     let message = `HTTP ${res.status}`
     try {
-      const body = (await res.json()) as { message?: string; detail?: string }
+      const body = (await res.json()) as { message?: string, detail?: string }
       message = body.message ?? body.detail ?? message
-    } catch {
+    }
+    catch {
       // ignore
     }
     throw new ApiError(message, res.status)
   }
 }
 
-
 /** ページ離脱時の切断通知を送信する（Beacon / KeepAlive） */
 export function notifyDisconnect(roomId: string): void {
   const url = `${API_BASE_URL}/api/rooms/${roomId}/disconnect`
   if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
     navigator.sendBeacon(url)
-  } else {
+  }
+  else {
     fetch(url, {
       method: 'POST',
       credentials: 'include',

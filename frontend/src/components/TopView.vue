@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { Settings } from '../types'
 import { onMounted, ref, watch } from 'vue'
 import { useGameStore } from '../store/game'
-import type { Settings } from '../types'
 import RuleSettingsForm from './RuleSettingsForm.vue'
 
 const store = useGameStore()
@@ -71,14 +71,14 @@ function onResetJoin(): void {
   resetJoin(true)
 }
 
-
 async function onCreateRoom(): Promise<void> {
   store.draftSettings = { ...draft.value }
   isCreating.value = true
   store.clearError()
   try {
     await store.createRoom(createPassword.value.trim() || null)
-  } finally {
+  }
+  finally {
     isCreating.value = false
   }
 }
@@ -107,14 +107,15 @@ async function onCheckRoom(): Promise<void> {
     }
     checkedRoomId.value = id
     needsPassword.value = info.hasPassword
-  } catch {
+  }
+  catch {
     resetJoin(false)
     store.errorMessage = '部屋が見つかりませんでした。'
-  } finally {
+  }
+  finally {
     isChecking.value = false
   }
 }
-
 
 async function onJoinRoom(): Promise<void> {
   const id = checkedRoomId.value ?? extractRoomId(joinRoomId.value)
@@ -131,20 +132,23 @@ async function onJoinRoom(): Promise<void> {
   store.clearError()
   try {
     await store.joinRoom(id, name, needsPassword.value ? joinPassword.value : null)
-  } finally {
+  }
+  finally {
     isJoining.value = false
   }
 }
 
 function extractRoomId(input: string): string {
   const trimmed = input.trim()
-  if (!trimmed) return ''
+  if (!trimmed)
+    return ''
   // URL の場合は最後のパス要素をルームID とみなす
   try {
     const url = new URL(trimmed)
     const parts = url.pathname.split('/').filter(Boolean)
     return parts[parts.length - 1] ?? trimmed
-  } catch {
+  }
+  catch {
     return trimmed
   }
 }
@@ -155,7 +159,9 @@ function extractRoomId(input: string): string {
     <!-- 専用URL直接アクセス時 -->
     <template v-if="dedicatedRoomId">
       <div v-if="store.isRestoringRoom || isChecking" class="dedicated-status">
-        <p class="notice info">ルームに接続しています…</p>
+        <p class="notice info">
+          ルームに接続しています…
+        </p>
       </div>
 
       <div v-else-if="roomNotFound" class="panel setup-panel dedicated-card">
@@ -164,9 +170,13 @@ function extractRoomId(input: string): string {
             <h2>ルームが見つかりません</h2>
             <p>指定されたルームは存在しないか、終了した可能性があります。</p>
           </div>
-          <div class="header-mark">ビンゴ</div>
+          <div class="header-mark">
+            ビンゴ
+          </div>
         </header>
-        <p class="notice error mb-4">ルームが存在しません。</p>
+        <p class="notice error mb-4">
+          ルームが存在しません。
+        </p>
         <button type="button" class="primary-button" @click="onResetJoin">
           トップページへ戻る
         </button>
@@ -178,14 +188,20 @@ function extractRoomId(input: string): string {
             <h2>ルームに参加</h2>
             <p>名前を入力してゲームに参加してください。</p>
           </div>
-          <div class="header-mark">ビンゴ</div>
+          <div class="header-mark">
+            ビンゴ
+          </div>
         </header>
 
-        <p v-if="store.errorMessage" class="notice error mb-4">{{ store.errorMessage }}</p>
+        <p v-if="store.errorMessage" class="notice error mb-4">
+          {{ store.errorMessage }}
+        </p>
 
         <div class="settings-form">
           <fieldset class="panel-fieldset">
-            <legend class="panel-legend">参加者名</legend>
+            <legend class="panel-legend">
+              参加者名
+            </legend>
             <div class="field">
               <label for="dedicatedJoinName" class="field-label">参加者名</label>
               <input
@@ -244,7 +260,9 @@ function extractRoomId(input: string): string {
         <div>
           <h1>しりとりビンゴ</h1>
         </div>
-        <div class="header-mark">ビンゴ</div>
+        <div class="header-mark">
+          ビンゴ
+        </div>
       </header>
 
       <p v-if="store.noticeMessage" class="notice info mb-4">
@@ -254,7 +272,6 @@ function extractRoomId(input: string): string {
       <p v-if="store.errorMessage" class="notice error mb-4">
         {{ store.errorMessage }}
       </p>
-
 
       <div class="top-grid">
         <!-- ルーム参加パネル（左：幅1） -->
@@ -266,7 +283,9 @@ function extractRoomId(input: string): string {
             </div>
 
             <div v-if="roomNotFound" class="join-content">
-              <p class="notice error mb-3">ルームが存在しません。</p>
+              <p class="notice error mb-3">
+                ルームが存在しません。
+              </p>
               <button type="button" class="primary-button" @click="onResetJoin">
                 再入力する
               </button>
@@ -369,7 +388,9 @@ function extractRoomId(input: string): string {
             >
               <!-- ルーム作成時の合言葉・パスワード設定（任意） -->
               <fieldset class="panel-fieldset">
-                <legend class="panel-legend">ルーム作成オプション</legend>
+                <legend class="panel-legend">
+                  ルーム作成オプション
+                </legend>
                 <div class="field">
                   <label for="createRoomPassword" class="field-label">合言葉・パスワード（任意）</label>
                   <div class="password-input-wrap">
@@ -466,11 +487,21 @@ function extractRoomId(input: string): string {
   color: var(--fg-main);
 }
 
-.mb-3 { margin-bottom: 12px; }
-.mb-4 { margin-bottom: 16px; }
-.mt-1 { margin-top: 4px; }
-.mt-3 { margin-top: 12px; }
-.ml-4 { margin-left: 16px; }
+.mb-3 {
+  margin-bottom: 12px;
+}
+.mb-4 {
+  margin-bottom: 16px;
+}
+.mt-1 {
+  margin-top: 4px;
+}
+.mt-3 {
+  margin-top: 12px;
+}
+.ml-4 {
+  margin-left: 16px;
+}
 
 @media (max-width: 960px) {
   .join-panel {

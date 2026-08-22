@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { BingoCard as BingoCardType } from '../types'
+import { computed } from 'vue'
 import { buildCellFlags } from '../utils/bingo'
 import { isSmallKana } from '../utils/shiritori'
 import DisconnectedMark from './DisconnectedMark.vue'
@@ -10,7 +10,7 @@ const props = withDefaults(
     card: BingoCardType
     title?: string
     subtitle?: string
-    members?: { name: string; disconnected: boolean }[]
+    members?: { name: string, disconnected: boolean }[]
     disconnected?: boolean
     disqualified?: boolean
     previewChars?: string[]
@@ -44,7 +44,7 @@ const bingoLineCount = computed(() => {
 
 // 開いたマス数（FREE含む）
 const openedCellCount = computed(() => {
-  return props.card.cells.filter((c) => c.isOpen || c.isFree).length
+  return props.card.cells.filter(c => c.isOpen || c.isFree).length
 })
 
 const gridStyle = computed(() => {
@@ -56,18 +56,26 @@ const gridStyle = computed(() => {
 // マス目のサイズに応じた動的フォントサイズ
 const cellFontSize = computed(() => {
   const s = props.card.size
-  if (s <= 3) return 'clamp(1.2rem, 3.2vw, 2rem)'
-  if (s <= 5) return 'clamp(0.85rem, 2.1vw, 1.35rem)'
+  if (s <= 3)
+    return 'clamp(1.2rem, 3.2vw, 2rem)'
+  if (s <= 5)
+    return 'clamp(0.85rem, 2.1vw, 1.35rem)'
   return 'clamp(0.7rem, 1.5vw, 1rem)'
 })
 
 function cellLabel(flags: ReturnType<typeof buildCellFlags>[number], char: string): string {
-  if (flags.isFree) return 'フリー'
-  if (flags.lineIds.length > 0) return `${char} ビンゴ成立`
-  if (flags.isOpen) return `${char} 開放済み`
-  if (flags.isPreview) return `${char} プレビュー`
-  if (flags.isReachHighlight) return `${char} リーチ強調`
-  if (flags.isReach) return `${char} リーチ`
+  if (flags.isFree)
+    return 'フリー'
+  if (flags.lineIds.length > 0)
+    return `${char} ビンゴ成立`
+  if (flags.isOpen)
+    return `${char} 開放済み`
+  if (flags.isPreview)
+    return `${char} プレビュー`
+  if (flags.isReachHighlight)
+    return `${char} リーチ強調`
+  if (flags.isReach)
+    return `${char} リーチ`
   return `${char} 未開放`
 }
 </script>
@@ -159,7 +167,9 @@ function cellLabel(flags: ReturnType<typeof buildCellFlags>[number], char: strin
   border-radius: 16px;
   background: #fffefa;
   box-shadow: 0 4px 14px rgba(23, 35, 45, 0.05);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
   display: flex;
   flex-direction: column;
 }
@@ -256,7 +266,10 @@ function cellLabel(flags: ReturnType<typeof buildCellFlags>[number], char: strin
   font-weight: 700;
   line-height: 1;
   user-select: none;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
 }
 
 .bingo-cell.is-open {
@@ -303,7 +316,7 @@ function cellLabel(flags: ReturnType<typeof buildCellFlags>[number], char: strin
   right: 3px;
   bottom: 2px;
   color: #9a6b11;
-  content: "★";
+  content: '★';
   font-size: 0.65rem;
   line-height: 1;
 }

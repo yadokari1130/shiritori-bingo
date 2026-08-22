@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
 import type { Settings } from '../types'
+import { computed, onMounted, onUnmounted } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -39,12 +39,18 @@ onUnmounted(() => {
 const cardOptionLabels = computed(() => {
   const opts = props.settings.cardOptions
   const list: string[] = []
-  if (opts.dakuten) list.push('濁音（が・ざ・だ・ば等）')
-  if (opts.handakuten) list.push('半濁音（ぱ・ぴ・ぷ・ぺ・ぽ）')
-  if (opts.yoon) list.push('拗音（ゃ・ゅ・ょ）')
-  if (opts.sokuon) list.push('促音（っ）')
-  if (opts.smallA) list.push('小さいあ行（ぁ・ぃ・ぅ・ぇ・ぉ）')
-  if (opts.prolonged) list.push('伸ばし棒（ー）')
+  if (opts.dakuten)
+    list.push('濁音（が・ざ・だ・ば等）')
+  if (opts.handakuten)
+    list.push('半濁音（ぱ・ぴ・ぷ・ぺ・ぽ）')
+  if (opts.yoon)
+    list.push('拗音（ゃ・ゅ・ょ）')
+  if (opts.sokuon)
+    list.push('促音（っ）')
+  if (opts.smallA)
+    list.push('小さいあ行（ぁ・ぃ・ぅ・ぇ・ぉ）')
+  if (opts.prolonged)
+    list.push('伸ばし棒（ー）')
   return list
 })
 
@@ -80,7 +86,9 @@ const wordLengthLimitText = computed(() => {
         <header class="rule-modal-header">
           <div class="modal-title-group">
             <span class="modal-badge">📖 ルールガイド</span>
-            <h2 id="rule-modal-title">ゲームルール説明</h2>
+            <h2 id="rule-modal-title">
+              ゲームルール説明
+            </h2>
           </div>
           <button
             type="button"
@@ -96,7 +104,9 @@ const wordLengthLimitText = computed(() => {
         <div class="rule-modal-body">
           <!-- 現在の設定サマリー -->
           <section class="rule-summary-banner">
-            <h3 class="summary-banner-title">現在の適用ルール概要</h3>
+            <h3 class="summary-banner-title">
+              現在の適用ルール概要
+            </h3>
             <div class="summary-chips">
               <span class="rule-chip">
                 {{ settings.mode === 'team' ? `👥 チーム戦 (${settings.teamCount}チーム)` : '👤 個人戦' }}
@@ -568,7 +578,9 @@ const wordLengthLimitText = computed(() => {
   font-weight: 700;
 }
 
-.mt-1 { margin-top: 4px; }
+.mt-1 {
+  margin-top: 4px;
+}
 
 /* フッター */
 .rule-modal-footer {
@@ -587,8 +599,12 @@ const wordLengthLimitText = computed(() => {
 
 /* アニメーション */
 @keyframes modal-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes modal-slide-up {

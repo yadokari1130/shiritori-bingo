@@ -2,10 +2,10 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import TopView from './TopView.vue'
 import * as api from '../api'
+import TopView from './TopView.vue'
 
-describe('TopView', () => {
+describe('topView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     window.history.replaceState(null, '', '/game/room123')

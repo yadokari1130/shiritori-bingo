@@ -1,11 +1,11 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import PlayingView from './PlayingView.vue'
 import { useGameStore } from '../store/game'
 import { createDefaultSettings } from '../types'
+import PlayingView from './PlayingView.vue'
 
-describe('PlayingView タイマー・時間同期', () => {
+describe('playingView タイマー・時間同期', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.useFakeTimers()
@@ -350,7 +350,7 @@ describe('PlayingView タイマー・時間同期', () => {
     expect(document.body.querySelector('.rule-modal-backdrop')).toBeNull()
 
     // ルール説明ボタンをクリック
-    const ruleBtn = wrapper.findAll('button').find((b) => b.text().includes('ルール説明'))
+    const ruleBtn = wrapper.findAll('button').find(b => b.text().includes('ルール説明'))
     expect(ruleBtn).toBeDefined()
     await ruleBtn!.trigger('click')
 
@@ -524,7 +524,7 @@ describe('PlayingView タイマー・時間同期', () => {
     expect(submitSpy).not.toHaveBeenCalled()
   })
 
-  it('PlayingView: 手番が移るタイミングで補助モードがOFFにリセットされる', async () => {
+  it('playingView: 手番が移るタイミングで補助モードがOFFにリセットされる', async () => {
     const store = useGameStore()
     store.myPlayerId = 'p1'
     const state1 = {
@@ -601,6 +601,3 @@ describe('PlayingView タイマー・時間同期', () => {
     expect(chips[1].text()).toBe('たぬき')
   })
 })
-
-
-

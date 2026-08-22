@@ -1,8 +1,8 @@
+import type { GameState } from '../types'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useGameStore } from './game'
 import { createDefaultSettings } from '../types'
-import type { GameState } from '../types'
+import { useGameStore } from './game'
 
 function createMockGameState(overrides: Partial<GameState> = {}): GameState {
   return {
@@ -306,5 +306,3 @@ describe('game ストア', () => {
     expect(store.gameState?.settings.minWordLength).toBe(3)
   })
 })
-
-

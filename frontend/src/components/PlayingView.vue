@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useGameStore } from '../store/game'
+import { validateWordForFrontend } from '../utils/shiritori'
 import BingoCard from './BingoCard.vue'
 import DisconnectedMark from './DisconnectedMark.vue'
 import RuleExplanationModal from './RuleExplanationModal.vue'
-import { validateWordForFrontend } from '../utils/shiritori'
 
 const store = useGameStore()
 
@@ -36,17 +36,20 @@ onUnmounted(() => {
 
 const previewChars = computed(() => {
   const word = inputWord.value.trim()
-  if (!word) return []
+  if (!word)
+    return []
   const chars: string[] = []
   for (const ch of word) {
-    if (!chars.includes(ch)) chars.push(ch)
+    if (!chars.includes(ch))
+      chars.push(ch)
   }
   return chars
 })
 
 const remainingMs = computed(() => {
   const state = store.gameState
-  if (!state || state.phase !== 'playing') return 0
+  if (!state || state.phase !== 'playing')
+    return 0
 
   if (state.turnStartedAt !== null && state.turnStartedAt !== undefined && state.currentTurnTimeLimitMs > 0) {
     const serverNow = now.value + store.serverTimeOffset
@@ -77,17 +80,19 @@ watch(timerExpired, (expired) => {
 })
 
 const currentPlayerName = computed(() => {
-  if (!store.gameState) return ''
+  if (!store.gameState)
+    return ''
   if (store.gameState.settings.mode === 'individual') {
-    const p = store.gameState.players.find((pl) => pl.id === store.gameState!.currentPlayerId)
+    const p = store.gameState.players.find(pl => pl.id === store.gameState!.currentPlayerId)
     return p?.name ?? ''
   }
-  const idx = store.gameState.teams.findIndex((t) => t.id === store.gameState!.currentTeamId)
+  const idx = store.gameState.teams.findIndex(t => t.id === store.gameState!.currentTeamId)
   return idx >= 0 ? `チーム ${idx + 1}` : ''
 })
 
 const currentSubjectId = computed(() => {
-  if (!store.gameState) return null
+  if (!store.gameState)
+    return null
   if (store.gameState.settings.mode === 'individual') {
     return store.gameState.currentPlayerId
   }
@@ -95,34 +100,35 @@ const currentSubjectId = computed(() => {
 })
 
 const orderedCards = computed(() => {
-  if (!store.gameState) return []
+  if (!store.gameState)
+    return []
   if (store.gameState.settings.mode === 'individual') {
     return store.orderedPlayers
-      .filter((p) => Boolean(p.card))
-      .map((p) => ({
-         id: p.id,
-         title: p.isCpu ? `🤖 ${p.name}` : p.name,
-         subtitle: undefined,
-         members: [],
-         disconnected: p.connectionStatus === 'disconnected',
-         card: p.card!,
+      .filter(p => Boolean(p.card))
+      .map(p => ({
+        id: p.id,
+        title: p.isCpu ? `🤖 ${p.name}` : p.name,
+        subtitle: undefined,
+        members: [],
+        disconnected: p.connectionStatus === 'disconnected',
+        card: p.card!,
         disqualified: p.status === 'disqualified',
       }))
   }
   return store.orderedTeams
-    .filter((t) => Boolean(t.card))
+    .filter(t => Boolean(t.card))
     .map((t, idx) => ({
-       id: t.id,
-       title: `チーム ${idx + 1}`,
-       subtitle: undefined,
-       disconnected: false,
-       members: t.memberPlayerIds
-         .map((id) => store.gameState!.players.find((p) => p.id === id))
-         .filter((player): player is NonNullable<typeof player> => Boolean(player))
-         .map((player) => ({
-           name: player.isCpu ? `🤖 ${player.name}` : player.name,
-           disconnected: player.connectionStatus === 'disconnected',
-         })),
+      id: t.id,
+      title: `チーム ${idx + 1}`,
+      subtitle: undefined,
+      disconnected: false,
+      members: t.memberPlayerIds
+        .map(id => store.gameState!.players.find(p => p.id === id))
+        .filter((player): player is NonNullable<typeof player> => Boolean(player))
+        .map(player => ({
+          name: player.isCpu ? `🤖 ${player.name}` : player.name,
+          disconnected: player.connectionStatus === 'disconnected',
+        })),
       card: t.card!,
       disqualified: t.status === 'disqualified',
     }))
@@ -130,7 +136,8 @@ const orderedCards = computed(() => {
 
 const turnProgress = computed(() => {
   const state = store.gameState
-  if (!state) return ''
+  if (!state)
+    return ''
   const total = state.roundRoster.length
   const current = Math.min(state.orderIndex + 1, total)
   return `${state.round}ターン目 ${current}/${total}手番`
@@ -177,32 +184,38 @@ function validateInput(): boolean {
 }
 
 async function onSubmitWord(): Promise<void> {
-  if (!store.canInput || timerExpired.value) return
-  if (!validateInput()) return
+  if (!store.canInput || timerExpired.value)
+    return
+  if (!validateInput())
+    return
   isSubmitting.value = true
   try {
     await store.submitWord(inputWord.value)
     inputWord.value = ''
     inputError.value = ''
-  } finally {
+  }
+  finally {
     isSubmitting.value = false
   }
 }
 
 async function onUndo(): Promise<void> {
-  if (!store.canUndo) return
+  if (!store.canUndo)
+    return
   await store.submitUndo()
 }
 
 async function onSkip(): Promise<void> {
   const id = currentSubjectId.value
-  if (!id || !store.isHost) return
+  if (!id || !store.isHost)
+    return
   await store.submitSkip(id)
 }
 
 async function onDisqualify(): Promise<void> {
   const id = currentSubjectId.value
-  if (!id || !store.isHost) return
+  if (!id || !store.isHost)
+    return
   await store.submitDisqualify(id)
 }
 
@@ -223,14 +236,15 @@ function formatTime(seconds: number): string {
 }
 
 function isCurrentCard(id: string): boolean {
-  if (!store.gameState) return false
+  if (!store.gameState)
+    return false
   if (store.gameState.settings.mode === 'individual') {
     return store.gameState.currentPlayerId === id
   }
   return store.gameState.currentTeamId === id
 }
 
-function historyKey(entry: { word: string; playerId: string; round: number; sequence: number }, index: number): string {
+function historyKey(entry: { word: string, playerId: string, round: number, sequence: number }, index: number): string {
   return `${entry.round}-${entry.sequence}-${index}`
 }
 </script>
@@ -250,7 +264,9 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
         >
           📖 ルール説明
         </button>
-        <div class="header-mark">対戦</div>
+        <div class="header-mark">
+          対戦
+        </div>
       </div>
     </header>
 
@@ -446,7 +462,7 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
                 'is-disqualified': item.disqualified,
               }"
             >
-               <span>{{ item.title }}<DisconnectedMark v-if="item.disconnected" /></span>
+              <span>{{ item.title }}<DisconnectedMark v-if="item.disconnected" /></span>
               <span class="order-status">
                 {{ item.disqualified ? '失格' : (isCurrentCard(item.id) ? '入力中' : '参加中') }}
               </span>
@@ -574,8 +590,12 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
   font-size: 0.82rem;
 }
 
-.ml-2 { margin-left: 8px; }
-.mt-2 { margin-top: 8px; }
+.ml-2 {
+  margin-left: 8px;
+}
+.mt-2 {
+  margin-top: 8px;
+}
 .assist-mode-row {
   display: flex;
   justify-content: space-between;
@@ -648,12 +668,14 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
   font-weight: 700;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
 }
 
 .assist-chip:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
   background: #fffdf5;
 }
 
@@ -664,8 +686,13 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 @media (max-width: 600px) {

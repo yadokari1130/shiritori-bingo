@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useGameStore } from '../store/game'
 import { useConfirm } from '../composables/useConfirm'
-import BingoCard from './BingoCard.vue'
-import DisconnectedMark from './DisconnectedMark.vue'
+import { useGameStore } from '../store/game'
 import { buildCharOpenStateColumns, collectOpenedChars } from '../utils/bingo'
 import { isSmallKana } from '../utils/shiritori'
+import BingoCard from './BingoCard.vue'
+import DisconnectedMark from './DisconnectedMark.vue'
 
 const store = useGameStore()
 const { showConfirm } = useConfirm()
@@ -18,7 +18,8 @@ const result = computed(() => store.gameState?.result)
 
 const reasonText = computed(() => {
   const r = result.value
-  if (!r) return ''
+  if (!r)
+    return ''
   switch (r.reason) {
     case 'turns':
       return `${r.endRound}ターンが終了しました。`
@@ -35,11 +36,12 @@ const snapshot = computed(() => result.value?.snapshot)
 const settings = computed(() => snapshot.value?.settings ?? store.gameState?.settings)
 
 const orderedResults = computed(() => {
-  if (!snapshot.value) return []
+  if (!snapshot.value)
+    return []
   if (snapshot.value.settings.mode === 'individual') {
     return snapshot.value.players
       .filter((p): p is typeof p & { card: NonNullable<typeof p.card> } => Boolean(p.card))
-      .map((p) => ({
+      .map(p => ({
         id: p.playerId,
         title: p.isCpu ? `🤖 ${p.name}` : p.name,
         subtitle: p.teamId ? 'チーム所属' : undefined,
@@ -57,9 +59,9 @@ const orderedResults = computed(() => {
       subtitle: undefined,
       disconnected: false,
       members: t.memberPlayerIds
-        .map((id) => snapshot.value!.players.find((p) => p.playerId === id))
+        .map(id => snapshot.value!.players.find(p => p.playerId === id))
         .filter((player): player is NonNullable<typeof player> => Boolean(player))
-        .map((player) => ({
+        .map(player => ({
           name: player.isCpu ? `🤖 ${player.name}` : player.name,
           disconnected: player.connectionStatus === 'disconnected',
         })),
@@ -70,26 +72,29 @@ const orderedResults = computed(() => {
 
 const charColumns = computed(() => {
   const s = settings.value
-  if (!s) return []
+  if (!s)
+    return []
   return buildCharOpenStateColumns(s.cardOptions)
 })
 
 const openedChars = computed(() => {
-  if (!snapshot.value) return new Set<string>()
+  if (!snapshot.value)
+    return new Set<string>()
   const cards = snapshot.value.settings.mode === 'individual'
-    ? snapshot.value.players.map((p) => p.card).filter((card): card is NonNullable<typeof card> => card !== null)
-    : snapshot.value.teams.map((t) => t.card)
+    ? snapshot.value.players.map(p => p.card).filter((card): card is NonNullable<typeof card> => card !== null)
+    : snapshot.value.teams.map(t => t.card)
   return collectOpenedChars(cards)
 })
 
 const history = computed(() => snapshot.value?.wordHistory ?? [])
 
 function isOpenedChar(char: string | null): boolean {
-  if (!char) return false
+  if (!char)
+    return false
   return openedChars.value.has(char)
 }
 
-function historyKey(entry: { word: string; playerId: string; round: number; sequence: number }, index: number): string {
+function historyKey(entry: { word: string, playerId: string, round: number, sequence: number }, index: number): string {
   return `${entry.round}-${entry.sequence}-${index}`
 }
 
@@ -104,7 +109,8 @@ async function onGoToTop(): Promise<void> {
       message: 'トップ画面へ戻りますか？',
       confirmText: '戻る',
     })
-    if (!ok) return
+    if (!ok)
+      return
   }
   await store.leaveAndGoToTop()
 }
@@ -126,7 +132,9 @@ async function onGoToTop(): Promise<void> {
         >
           トップに戻る
         </button>
-        <div class="header-mark">結果</div>
+        <div class="header-mark">
+          結果
+        </div>
       </div>
     </header>
 
@@ -141,8 +149,12 @@ async function onGoToTop(): Promise<void> {
     <!-- 結果サマリー -->
     <section class="panel summary-panel">
       <div class="summary-content">
-        <div class="summary-badge">GAME SET</div>
-        <p class="summary-reason">{{ reasonText }}</p>
+        <div class="summary-badge">
+          GAME SET
+        </div>
+        <p class="summary-reason">
+          {{ reasonText }}
+        </p>
         <p class="summary-sub">
           終了ターン: {{ result?.endRound ?? 0 }}ターン目
         </p>
@@ -180,15 +192,15 @@ async function onGoToTop(): Promise<void> {
               <td>
                 <strong>
                   {{
-                    snapshot?.players.find((p) => p.playerId === ranking.subjectId)?.name ??
-                    (snapshot?.teams.find((t) => t.teamId === ranking.subjectId)
-                      ? `チーム ${(snapshot?.teams.findIndex((t) => t.teamId === ranking.subjectId) ?? 0) + 1}`
-                      : '')
-                   }}
-                   <span v-if="snapshot?.players.find((p) => p.playerId === ranking.subjectId)?.isCpu" class="tag-badge cpu-badge ml-1">🤖 CPU</span>
-                   <DisconnectedMark
-                     v-if="ranking.subjectType === 'player' && snapshot?.players.find((p) => p.playerId === ranking.subjectId)?.connectionStatus === 'disconnected'"
-                   />
+                    snapshot?.players.find((p) => p.playerId === ranking.subjectId)?.name
+                      ?? (snapshot?.teams.find((t) => t.teamId === ranking.subjectId)
+                        ? `チーム ${(snapshot?.teams.findIndex((t) => t.teamId === ranking.subjectId) ?? 0) + 1}`
+                        : '')
+                  }}
+                  <span v-if="snapshot?.players.find((p) => p.playerId === ranking.subjectId)?.isCpu" class="tag-badge cpu-badge ml-1">🤖 CPU</span>
+                  <DisconnectedMark
+                    v-if="ranking.subjectType === 'player' && snapshot?.players.find((p) => p.playerId === ranking.subjectId)?.connectionStatus === 'disconnected'"
+                  />
                 </strong>
               </td>
               <td>{{ ranking.bingoCount }}本</td>
@@ -252,7 +264,9 @@ async function onGoToTop(): Promise<void> {
             :key="colIdx"
             class="kana-col"
           >
-            <div class="kana-col-header">{{ col.header }}</div>
+            <div class="kana-col-header">
+              {{ col.header }}
+            </div>
             <div
               v-for="(char, rowIdx) in col.chars"
               :key="rowIdx"

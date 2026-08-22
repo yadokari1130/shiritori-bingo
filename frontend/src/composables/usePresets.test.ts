@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { usePresets, sanitizeSettings } from './usePresets'
 import { createDefaultSettings } from '../types'
+import { sanitizeSettings, usePresets } from './usePresets'
 
 describe('usePresets', () => {
   beforeEach(() => {

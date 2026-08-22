@@ -8,14 +8,15 @@ withDefaults(
   }>(),
   {
     disableTeleport: false,
-  }
+  },
 )
 
 const { state, handleConfirm, handleCancel } = useConfirm()
 const confirmButtonRef = ref<HTMLButtonElement | null>(null)
 
 function onKeyDown(e: KeyboardEvent): void {
-  if (!state.value.isOpen) return
+  if (!state.value.isOpen)
+    return
   if (e.key === 'Escape') {
     e.preventDefault()
     handleCancel()
@@ -29,7 +30,7 @@ watch(
       await nextTick()
       confirmButtonRef.value?.focus()
     }
-  }
+  },
 )
 
 onMounted(() => {
@@ -53,8 +54,12 @@ onUnmounted(() => {
         @click.self="handleCancel"
       >
         <div class="confirm-modal-card">
-          <h2 class="confirm-modal-title">{{ state.title }}</h2>
-          <p class="confirm-modal-message">{{ state.message }}</p>
+          <h2 class="confirm-modal-title">
+            {{ state.title }}
+          </h2>
+          <p class="confirm-modal-message">
+            {{ state.message }}
+          </p>
           <div class="confirm-modal-actions">
             <button
               type="button"
@@ -66,7 +71,7 @@ onUnmounted(() => {
             <button
               ref="confirmButtonRef"
               type="button"
-              :class="[state.danger ? 'danger-button' : 'primary-button', 'modal-confirm-button']"
+              class="modal-confirm-button" :class="[state.danger ? 'danger-button' : 'primary-button']"
               @click="handleConfirm"
             >
               {{ state.confirmText }}

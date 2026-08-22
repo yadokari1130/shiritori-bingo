@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
-import { useGameStore } from './game'
-import * as api from '../api'
 import type { GameState } from '../types'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as api from '../api'
 import { createDefaultSettings } from '../types'
+import { useGameStore } from './game'
 
 vi.mock('../api', () => ({
   createRoom: vi.fn(),
@@ -218,4 +218,3 @@ describe('gameStore CPU・補助モード連携', () => {
     expect(store.wordSuggestions).toEqual(['たいやき', 'たぬき', 'たまご'])
   })
 })
-

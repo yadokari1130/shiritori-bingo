@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useGameStore } from '../store/game'
-import { useConfirm } from '../composables/useConfirm'
-import { buildCardCharPool, maxCardSize } from '../utils/shiritori'
 import type { Settings } from '../types'
-import RuleSettingsForm from './RuleSettingsForm.vue'
+import { computed, ref, watch } from 'vue'
+import { useConfirm } from '../composables/useConfirm'
+import { useGameStore } from '../store/game'
+import { buildCardCharPool, maxCardSize } from '../utils/shiritori'
 import DisconnectedMark from './DisconnectedMark.vue'
 import RuleExplanationModal from './RuleExplanationModal.vue'
+import RuleSettingsForm from './RuleSettingsForm.vue'
 
 const store = useGameStore()
 const { showConfirm } = useConfirm()
@@ -29,13 +29,15 @@ watch(
 watch(
   () => store.myPlayer,
   (p) => {
-    if (p) editingName.value = p.name
+    if (p)
+      editingName.value = p.name
   },
   { immediate: true },
 )
 
 const roomUrl = computed(() => {
-  if (!store.roomId) return ''
+  if (!store.roomId)
+    return ''
   return `${window.location.origin}/game/${store.roomId}`
 })
 
@@ -45,41 +47,53 @@ async function onAddCpu(): Promise<void> {
   isAddingCpu.value = true
   try {
     await store.addCpu()
-  } finally {
+  }
+  finally {
     isAddingCpu.value = false
   }
 }
 
 const canStart = computed(() => {
   const state = store.gameState
-  if (!state) return false
-  if (!store.isHost) return false
-  if (state.players.length < 2) return false
-  const humanPlayers = state.players.filter((p) => !p.isCpu)
-  if (humanPlayers.length < 1) return false
+  if (!state)
+    return false
+  if (!store.isHost)
+    return false
+  if (state.players.length < 2)
+    return false
+  const humanPlayers = state.players.filter(p => !p.isCpu)
+  if (humanPlayers.length < 1)
+    return false
 
   const s = editSettings.value
   const pool = buildCardCharPool(s.cardOptions)
   const max = maxCardSize(pool)
-  if (s.cardSize < 3 || s.cardSize % 2 === 0 || s.cardSize > max) return false
+  if (s.cardSize < 3 || s.cardSize % 2 === 0 || s.cardSize > max)
+    return false
 
-  if (s.endCondition === 'turns' && s.targetTurns <= 0) return false
-  if (s.endCondition === 'bingos' && (s.targetBingos < 1 || s.targetBingos > s.cardSize * 2 + 2)) return false
+  if (s.endCondition === 'turns' && s.targetTurns <= 0)
+    return false
+  if (s.endCondition === 'bingos' && (s.targetBingos < 1 || s.targetBingos > s.cardSize * 2 + 2))
+    return false
 
   if (s.mode === 'team') {
-    if (s.teamCount > state.players.length) return false
+    if (s.teamCount > state.players.length)
+      return false
     const teamIds = new Set<string>()
     for (const p of state.players) {
-      if (p.teamId) teamIds.add(p.teamId)
+      if (p.teamId)
+        teamIds.add(p.teamId)
     }
-    if (teamIds.size < s.teamCount) return false
+    if (teamIds.size < s.teamCount)
+      return false
   }
 
   return true
 })
 
 function copyUrl(): void {
-  if (!roomUrl.value) return
+  if (!roomUrl.value)
+    return
   navigator.clipboard.writeText(roomUrl.value).then(() => {
     copied.value = true
     setTimeout(() => (copied.value = false), 2000)
@@ -106,19 +120,23 @@ async function onSubmitName(): Promise<void> {
     editNameError.value = '名前を入力してください。'
     return
   }
-  if (!store.roomId) return
+  if (!store.roomId)
+    return
 
   editNameError.value = ''
   isSubmittingName.value = true
   try {
     if (!store.myPlayer) {
       await store.joinRoom(store.roomId, name, joinPassword.value || null)
-    } else {
+    }
+    else {
       await store.updateName(name)
     }
-  } catch {
+  }
+  catch {
     // エラーはストアに格納済み
-  } finally {
+  }
+  finally {
     isSubmittingName.value = false
   }
 }
@@ -127,7 +145,8 @@ async function onUpdateSettings(): Promise<void> {
   isUpdating.value = true
   try {
     await store.updateSettings({ ...editSettings.value })
-  } finally {
+  }
+  finally {
     isUpdating.value = false
   }
 }
@@ -142,7 +161,8 @@ async function onChangeHost(playerId: string, playerName: string): Promise<void>
     message: `${playerName} さんを親（ホスト）に変更しますか？`,
     confirmText: '変更する',
   })
-  if (!ok) return
+  if (!ok)
+    return
   await store.changeHost(playerId)
 }
 
@@ -153,7 +173,8 @@ async function onKickPlayer(playerId: string, playerName: string): Promise<void>
     confirmText: '退出させる',
     danger: true,
   })
-  if (!ok) return
+  if (!ok)
+    return
   await store.kickPlayer(playerId)
 }
 
@@ -170,10 +191,11 @@ function teamLabel(index: number): string {
 }
 
 function teamMemberNames(teamId: string): string {
-  if (!store.gameState) return ''
+  if (!store.gameState)
+    return ''
   return store.gameState.players
-    .filter((p: { teamId: string | null; name: string }) => p.teamId === teamId)
-    .map((p: { teamId: string | null; name: string }) => p.name)
+    .filter((p: { teamId: string | null, name: string }) => p.teamId === teamId)
+    .map((p: { teamId: string | null, name: string }) => p.name)
     .join('、')
 }
 
@@ -199,7 +221,8 @@ async function onGoToTop(): Promise<void> {
       message: 'ロビーから退出してトップ画面へ戻りますか？',
       confirmText: '退出する',
     })
-    if (!ok) return
+    if (!ok)
+      return
   }
   await store.leaveAndGoToTop()
 }
@@ -211,7 +234,8 @@ async function onDissolveRoom(): Promise<void> {
     confirmText: '解散する',
     danger: true,
   })
-  if (!ok) return
+  if (!ok)
+    return
   await store.dissolveRoom()
 }
 </script>
@@ -249,7 +273,6 @@ async function onDissolveRoom(): Promise<void> {
       </div>
     </header>
 
-
     <p v-if="store.errorMessage" class="notice error mb-4">
       {{ store.errorMessage }}
     </p>
@@ -258,268 +281,269 @@ async function onDissolveRoom(): Promise<void> {
       <!-- 左列：ルーム情報・参加者一覧・操作 -->
       <div class="lobby-grid-main">
         <div class="lobby-main-col">
-            <!-- 招待URL -->
-            <section class="panel setup-panel mb-4">
-              <div class="section-heading">
-                <div class="heading-with-badge">
-                  <h2>参加用URL</h2>
-                  <span v-if="store.hasPassword" class="tag-badge password-badge">🔒 パスワード設定あり</span>
-                  <span v-else class="tag-badge public-badge">🔓 パスワードなし</span>
+          <!-- 招待URL -->
+          <section class="panel setup-panel mb-4">
+            <div class="section-heading">
+              <div class="heading-with-badge">
+                <h2>参加用URL</h2>
+                <span v-if="store.hasPassword" class="tag-badge password-badge">🔒 パスワード設定あり</span>
+                <span v-else class="tag-badge public-badge">🔓 パスワードなし</span>
+              </div>
+              <p>このURLを他のプレイヤーに共有して招待します<span v-if="store.hasPassword">（参加時に合言葉が必要です）</span></p>
+            </div>
+            <div class="url-row">
+              <input
+                :value="roomUrl"
+                type="text"
+                class="text-input"
+                readonly
+              >
+              <button
+                type="button"
+                class="secondary-button"
+                @click="copyUrl"
+              >
+                {{ copied ? 'コピー完了！' : 'URLをコピー' }}
+              </button>
+            </div>
+          </section>
+
+          <!-- 参加者一覧 -->
+          <section class="panel setup-panel mb-4">
+            <div class="section-heading">
+              <h2>参加プレイヤー ({{ store.players.length }}人)</h2>
+              <p>2人以上で対戦を開始できます</p>
+            </div>
+
+            <ul class="players-list">
+              <li
+                v-for="player in store.players"
+                :key="player.id"
+                class="player-item"
+                :class="{ 'is-me': player.id === store.myPlayerId }"
+              >
+                <div class="player-info">
+                  <strong>{{ player.name }}<DisconnectedMark v-if="player.connectionStatus === 'disconnected'" /></strong>
+                  <span v-if="player.id === store.myPlayerId" class="tag-badge current-badge">あなた</span>
+                  <span v-if="player.isCpu" class="tag-badge cpu-badge">🤖 CPU</span>
                 </div>
-                <p>このURLを他のプレイヤーに共有して招待します<span v-if="store.hasPassword">（参加時に合言葉が必要です）</span></p>
-              </div>
-              <div class="url-row">
-                <input
-                  :value="roomUrl"
-                  type="text"
-                  class="text-input"
-                  readonly
-                >
-                <button
-                  type="button"
-                  class="secondary-button"
-                  @click="copyUrl"
-                >
-                  {{ copied ? 'コピー完了！' : 'URLをコピー' }}
-                </button>
-              </div>
-            </section>
-
-            <!-- 参加者一覧 -->
-            <section class="panel setup-panel mb-4">
-              <div class="section-heading">
-                <h2>参加プレイヤー ({{ store.players.length }}人)</h2>
-                <p>2人以上で対戦を開始できます</p>
-              </div>
-
-              <ul class="players-list">
-                <li
-                  v-for="player in store.players"
-                  :key="player.id"
-                  class="player-item"
-                  :class="{ 'is-me': player.id === store.myPlayerId }"
-                >
-                  <div class="player-info">
-                     <strong>{{ player.name }}<DisconnectedMark v-if="player.connectionStatus === 'disconnected'" /></strong>
-                    <span v-if="player.id === store.myPlayerId" class="tag-badge current-badge">あなた</span>
-                    <span v-if="player.isCpu" class="tag-badge cpu-badge">🤖 CPU</span>
+                <div class="player-right">
+                  <div class="player-badges">
+                    <span v-if="player.id === store.gameState?.hostPlayerId && !player.isCpu" class="status-badge">
+                      親（ホスト）
+                    </span>
                   </div>
-                  <div class="player-right">
-                    <div class="player-badges">
-                      <span v-if="player.id === store.gameState?.hostPlayerId && !player.isCpu" class="status-badge">
-                        親（ホスト）
-                      </span>
-                    </div>
-                    <div v-if="store.isHost && player.id !== store.myPlayerId" class="player-actions">
-                      <button
-                        v-if="!player.isCpu"
-                        type="button"
-                        class="secondary-button btn-xs"
-                        @click="onChangeHost(player.id, player.name)"
-                      >
-                        親にする
-                      </button>
-                      <button
-                        type="button"
-                        class="danger-button btn-xs"
-                        @click="onKickPlayer(player.id, player.name)"
-                      >
-                        {{ player.isCpu ? '削除' : '退出' }}
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              </ul>
-
-              <div v-if="store.isHost" class="add-cpu-container mt-3">
-                <button
-                  type="button"
-                  class="secondary-button w-100"
-                  :disabled="isAddingCpu"
-                  @click="onAddCpu"
-                >
-                  {{ isAddingCpu ? '追加中...' : '🤖 CPUプレイヤーを追加' }}
-                </button>
-              </div>
-
-              <div class="name-edit-box mt-4">
-                <label for="editMyName" class="field-label">
-                  {{ store.myPlayer ? '名前を変更する' : '名前を入力して参加' }}
-                </label>
-                <div v-if="!store.myPlayer && store.hasPassword && !store.isCreator" class="password-field mb-2">
-                  <label for="lobbyJoinPassword" class="field-label password-sublabel">合言葉・パスワード</label>
-                  <div class="password-input-wrap">
-                    <input
-                      id="lobbyJoinPassword"
-                      v-model="joinPassword"
-                      :type="showJoinPassword ? 'text' : 'password'"
-                      class="text-input"
-                      placeholder="パスワードを入力"
-                      @keydown.enter="onSubmitName"
+                  <div v-if="store.isHost && player.id !== store.myPlayerId" class="player-actions">
+                    <button
+                      v-if="!player.isCpu"
+                      type="button"
+                      class="secondary-button btn-xs"
+                      @click="onChangeHost(player.id, player.name)"
                     >
+                      親にする
+                    </button>
                     <button
                       type="button"
-                      class="toggle-pwd-btn"
-                      :aria-label="showJoinPassword ? 'パスワードを隠す' : 'パスワードを表示'"
-                      @click="showJoinPassword = !showJoinPassword"
+                      class="danger-button btn-xs"
+                      @click="onKickPlayer(player.id, player.name)"
                     >
-                      {{ showJoinPassword ? '非表示' : '表示' }}
+                      {{ player.isCpu ? '削除' : '退出' }}
                     </button>
                   </div>
                 </div>
-                <div class="name-input-row">
+              </li>
+            </ul>
+
+            <div v-if="store.isHost" class="add-cpu-container mt-3">
+              <button
+                type="button"
+                class="secondary-button w-100"
+                :disabled="isAddingCpu"
+                @click="onAddCpu"
+              >
+                {{ isAddingCpu ? '追加中...' : '🤖 CPUプレイヤーを追加' }}
+              </button>
+            </div>
+
+            <div class="name-edit-box mt-4">
+              <label for="editMyName" class="field-label">
+                {{ store.myPlayer ? '名前を変更する' : '名前を入力して参加' }}
+              </label>
+              <div v-if="!store.myPlayer && store.hasPassword && !store.isCreator" class="password-field mb-2">
+                <label for="lobbyJoinPassword" class="field-label password-sublabel">合言葉・パスワード</label>
+                <div class="password-input-wrap">
                   <input
-                    id="editMyName"
-                    v-model="editingName"
-                    type="text"
+                    id="lobbyJoinPassword"
+                    v-model="joinPassword"
+                    :type="showJoinPassword ? 'text' : 'password'"
                     class="text-input"
-                    :placeholder="store.myPlayer ? '新しい名前' : '名前を入力'"
+                    placeholder="パスワードを入力"
                     @keydown.enter="onSubmitName"
                   >
                   <button
                     type="button"
-                    class="secondary-button"
-                    :disabled="isSubmittingName || !editingName.trim()"
-                    @click="onSubmitName"
+                    class="toggle-pwd-btn"
+                    :aria-label="showJoinPassword ? 'パスワードを隠す' : 'パスワードを表示'"
+                    @click="showJoinPassword = !showJoinPassword"
                   >
-                    {{ isSubmittingName ? '更新中…' : (store.myPlayer ? '名前変更' : '参加する') }}
+                    {{ showJoinPassword ? '非表示' : '表示' }}
                   </button>
                 </div>
-                <p v-if="editNameError" class="notice error mt-2">{{ editNameError }}</p>
               </div>
-            </section>
-
-            <!-- チーム分け（チーム戦時） -->
-            <section v-if="store.gameState?.settings.mode === 'team'" class="panel setup-panel mb-4">
-              <div class="section-heading">
-                <h2>チーム編成</h2>
-                <p>所属するチームを選択してください</p>
-              </div>
-
-              <div class="teams-grid">
-                <div
-                  v-for="team in store.teams"
-                  :key="team.id"
-                  class="team-box"
-                  :class="{ 'is-my-team': team.id === store.myPlayer?.teamId }"
+              <div class="name-input-row">
+                <input
+                  id="editMyName"
+                  v-model="editingName"
+                  type="text"
+                  class="text-input"
+                  :placeholder="store.myPlayer ? '新しい名前' : '名前を入力'"
+                  @keydown.enter="onSubmitName"
                 >
-                  <div class="team-title-row">
-                    <strong>{{ teamLabel(store.teams.indexOf(team)) }}</strong>
-                    <span v-if="team.id === store.myPlayer?.teamId" class="status-badge">所属中</span>
-                  </div>
-                  <p class="team-members">
-                    {{ teamMemberNames(team.id) || '（未所属）' }}
-                  </p>
-                  <div class="team-action">
-                    <button
-                      v-if="team.id !== store.myPlayer?.teamId"
-                      type="button"
-                      class="secondary-button btn-sm"
-                      @click="onSelectTeam(team.id)"
-                    >
-                      このチームに入る
-                    </button>
-                    <button
-                      v-else
-                      type="button"
-                      class="danger-button btn-sm"
-                      @click="onSelectTeam(null)"
-                    >
-                      抜ける
-                    </button>
-                  </div>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  :disabled="isSubmittingName || !editingName.trim()"
+                  @click="onSubmitName"
+                >
+                  {{ isSubmittingName ? '更新中…' : (store.myPlayer ? '名前変更' : '参加する') }}
+                </button>
+              </div>
+              <p v-if="editNameError" class="notice error mt-2">
+                {{ editNameError }}
+              </p>
+            </div>
+          </section>
+
+          <!-- チーム分け（チーム戦時） -->
+          <section v-if="store.gameState?.settings.mode === 'team'" class="panel setup-panel mb-4">
+            <div class="section-heading">
+              <h2>チーム編成</h2>
+              <p>所属するチームを選択してください</p>
+            </div>
+
+            <div class="teams-grid">
+              <div
+                v-for="team in store.teams"
+                :key="team.id"
+                class="team-box"
+                :class="{ 'is-my-team': team.id === store.myPlayer?.teamId }"
+              >
+                <div class="team-title-row">
+                  <strong>{{ teamLabel(store.teams.indexOf(team)) }}</strong>
+                  <span v-if="team.id === store.myPlayer?.teamId" class="status-badge">所属中</span>
+                </div>
+                <p class="team-members">
+                  {{ teamMemberNames(team.id) || '（未所属）' }}
+                </p>
+                <div class="team-action">
+                  <button
+                    v-if="team.id !== store.myPlayer?.teamId"
+                    type="button"
+                    class="secondary-button btn-sm"
+                    @click="onSelectTeam(team.id)"
+                  >
+                    このチームに入る
+                  </button>
+                  <button
+                    v-else
+                    type="button"
+                    class="danger-button btn-sm"
+                    @click="onSelectTeam(null)"
+                  >
+                    抜ける
+                  </button>
                 </div>
               </div>
+            </div>
 
-              <div v-if="store.isHost" class="mt-3">
-                <button
-                  type="button"
-                  class="secondary-button btn-sm"
-                  @click="onRandomizeTeams"
-                >
-                  未所属者を均等に振り分ける
-                </button>
-              </div>
-            </section>
+            <div v-if="store.isHost" class="mt-3">
+              <button
+                type="button"
+                class="secondary-button btn-sm"
+                @click="onRandomizeTeams"
+              >
+                未所属者を均等に振り分ける
+              </button>
+            </div>
+          </section>
 
-            <!-- 親の操作（開始・解散） -->
-            <section v-if="store.isHost" class="panel setup-panel mb-4 host-action-panel">
-              <div class="section-heading">
-                <h2>親の操作</h2>
-                <p>全員が揃ったらゲームを開始してください</p>
-              </div>
+          <!-- 親の操作（開始・解散） -->
+          <section v-if="store.isHost" class="panel setup-panel mb-4 host-action-panel">
+            <div class="section-heading">
+              <h2>親の操作</h2>
+              <p>全員が揃ったらゲームを開始してください</p>
+            </div>
 
-              <div class="host-action-buttons">
-                <button
-                  type="button"
-                  class="primary-button start-game-btn"
-                  :disabled="!canStart"
-                  @click="onStartGame"
-                >
-                  ゲームを開始する
-                </button>
-                <button
-                  type="button"
-                  class="danger-button dissolve-room-btn"
-                  @click="onDissolveRoom"
-                >
-                  部屋を解散する
-                </button>
-              </div>
-              <p v-if="!canStart" class="help-note mt-2 text-danger">
-                ※2人以上の参加、正しいルール設定、チーム戦では各チームに最低1人の所属が必要です。
-              </p>
-            </section>
+            <div class="host-action-buttons">
+              <button
+                type="button"
+                class="primary-button start-game-btn"
+                :disabled="!canStart"
+                @click="onStartGame"
+              >
+                ゲームを開始する
+              </button>
+              <button
+                type="button"
+                class="danger-button dissolve-room-btn"
+                @click="onDissolveRoom"
+              >
+                部屋を解散する
+              </button>
+            </div>
+            <p v-if="!canStart" class="help-note mt-2 text-danger">
+              ※2人以上の参加、正しいルール設定、チーム戦では各チームに最低1人の所属が必要です。
+            </p>
+          </section>
 
-
-            <section v-else class="panel setup-panel mb-4">
-              <p class="notice info">
-                親（ホスト）がゲームを開始するのを待機しています…
-              </p>
-            </section>
-          </div>
-        </div>
-
-        <!-- 右列：ルール設定プレビュー／編集（親のみ編集可能） -->
-        <div class="lobby-grid-side">
-          <div class="lobby-side-col">
-            <section class="panel setup-panel">
-              <div class="section-heading">
-                <h2>{{ store.isHost ? 'ルール設定の変更' : 'ルール設定' }}</h2>
-                <p>{{ store.isHost ? '変更後に「設定を反映」を押してください' : '現在のゲーム設定' }}</p>
-              </div>
-
-              <RuleSettingsForm
-                v-if="store.isHost"
-                v-model="editSettings"
-                submit-button-text="設定を反映する"
-                :is-submitting="isUpdating"
-                @submit="onUpdateSettings"
-              />
-
-              <!-- 参加者視点（設定プレビューのみ） -->
-              <div v-else class="settings-preview">
-                <p><strong>モード:</strong> {{ store.settings.mode === 'team' ? `チーム戦 (${store.settings.teamCount}チーム)` : '個人戦' }}</p>
-                <p><strong>カード:</strong> {{ store.settings.cardSize }}×{{ store.settings.cardSize }} マス</p>
-                <p>
-                  <strong>終了条件:</strong>
-                  {{ store.settings.endCondition === 'turns' ? `指定ターン数 (${store.settings.targetTurns}ターン)` : `指定ビンゴ数 (${store.settings.targetBingos}本達成)` }}
-                </p>
-                <p>
-                  <strong>時間設定:</strong>
-                  制限時間 {{ store.settings.timeLimitSeconds }}秒 / 初回エクストラ {{ store.settings.extraTimeSeconds }}秒{{ store.settings.forceSkipOnTimeout ? '（時間切れで強制スキップ）' : '' }}
-                </p>
-                <p><strong>無効入力の扱い:</strong> {{ store.settings.invalidAction === 'disqualify' ? '失格' : 'ターンスキップ' }}</p>
-                <p>
-                  <strong>エクストラルール:</strong>
-                  入力文字チェック: {{ store.settings.inputWordCheck ? '有効' : '無効' }} /
-                  文字数制限: {{ formatWordLengthLimit(store.settings) }}
-                </p>
-              </div>
-            </section>
-          </div>
+          <section v-else class="panel setup-panel mb-4">
+            <p class="notice info">
+              親（ホスト）がゲームを開始するのを待機しています…
+            </p>
+          </section>
         </div>
       </div>
+
+      <!-- 右列：ルール設定プレビュー／編集（親のみ編集可能） -->
+      <div class="lobby-grid-side">
+        <div class="lobby-side-col">
+          <section class="panel setup-panel">
+            <div class="section-heading">
+              <h2>{{ store.isHost ? 'ルール設定の変更' : 'ルール設定' }}</h2>
+              <p>{{ store.isHost ? '変更後に「設定を反映」を押してください' : '現在のゲーム設定' }}</p>
+            </div>
+
+            <RuleSettingsForm
+              v-if="store.isHost"
+              v-model="editSettings"
+              submit-button-text="設定を反映する"
+              :is-submitting="isUpdating"
+              @submit="onUpdateSettings"
+            />
+
+            <!-- 参加者視点（設定プレビューのみ） -->
+            <div v-else class="settings-preview">
+              <p><strong>モード:</strong> {{ store.settings.mode === 'team' ? `チーム戦 (${store.settings.teamCount}チーム)` : '個人戦' }}</p>
+              <p><strong>カード:</strong> {{ store.settings.cardSize }}×{{ store.settings.cardSize }} マス</p>
+              <p>
+                <strong>終了条件:</strong>
+                {{ store.settings.endCondition === 'turns' ? `指定ターン数 (${store.settings.targetTurns}ターン)` : `指定ビンゴ数 (${store.settings.targetBingos}本達成)` }}
+              </p>
+              <p>
+                <strong>時間設定:</strong>
+                制限時間 {{ store.settings.timeLimitSeconds }}秒 / 初回エクストラ {{ store.settings.extraTimeSeconds }}秒{{ store.settings.forceSkipOnTimeout ? '（時間切れで強制スキップ）' : '' }}
+              </p>
+              <p><strong>無効入力の扱い:</strong> {{ store.settings.invalidAction === 'disqualify' ? '失格' : 'ターンスキップ' }}</p>
+              <p>
+                <strong>エクストラルール:</strong>
+                入力文字チェック: {{ store.settings.inputWordCheck ? '有効' : '無効' }} /
+                文字数制限: {{ formatWordLengthLimit(store.settings) }}
+              </p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
 
     <!-- ルール説明モーダル -->
     <RuleExplanationModal
@@ -666,10 +690,18 @@ async function onDissolveRoom(): Promise<void> {
   color: var(--danger);
 }
 
-.mt-2 { margin-top: 8px; }
-.mt-3 { margin-top: 12px; }
-.mt-4 { margin-top: 16px; }
-.mb-4 { margin-bottom: 16px; }
+.mt-2 {
+  margin-top: 8px;
+}
+.mt-3 {
+  margin-top: 12px;
+}
+.mt-4 {
+  margin-top: 16px;
+}
+.mb-4 {
+  margin-bottom: 16px;
+}
 
 .header-actions {
   display: flex;
@@ -764,6 +796,7 @@ async function onDissolveRoom(): Promise<void> {
   color: var(--fg-main);
 }
 
-.mb-2 { margin-bottom: 8px; }
+.mb-2 {
+  margin-bottom: 8px;
+}
 </style>
-
