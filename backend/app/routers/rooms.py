@@ -376,6 +376,9 @@ async def get_assist(room_id: str, request: Request):
     if state.phase != "playing":
         return JSONResponse(status_code=200, content={"suggestions": []})
 
+    if state.assistSuggestions:
+        return JSONResponse(status_code=200, content={"suggestions": state.assistSuggestions})
+
     current_subject = (
         state.currentPlayerId
         if state.settings.mode == "individual"

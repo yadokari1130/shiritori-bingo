@@ -134,28 +134,53 @@ describe('gameStore CPU・補助モード連携', () => {
     expect(store.canInput).toBe(false)
   })
 
-  it('setAssistMode: 補助モードを切り替え、手番時に推薦単語を取得する', async () => {
+  it('setAssistMode: 補助モードを切り替え、手番時に推薦単語を取得・反映する', async () => {
     const store = useGameStore()
     const state = createBaseGameState()
     state.phase = 'playing'
     state.players[0].status = 'active'
     state.currentPlayerId = 'player-1'
+    state.assistSuggestions = ['りんご', 'りす', 'りぼん']
     store.roomId = 'room-1'
     store.myPlayerId = 'player-1'
 
-    vi.mocked(api.fetchWordSuggestions).mockResolvedValue({
-      suggestions: ['りんご', 'りす', 'りぼん'],
-    })
-
+    store.applyGameState(state)
     store.setAssistMode(true)
     expect(store.assistMode).toBe(true)
     expect(localStorage.getItem('shiritori-bingo:assist-mode')).toBe('true')
+    expect(store.wordSuggestions).toEqual(['りんご', 'りす', 'りぼん'])
+  })
+
+  it('他のプレイヤーの手番中であっても補助モードをONにすると共通の候補単語を閲覧できる', async () => {
+    const store = useGameStore()
+    const state = createBaseGameState()
+    state.phase = 'playing'
+    state.players[0].status = 'active'
+    state.players.push({
+      id: 'player-2',
+      name: 'ゲスト',
+      teamId: null,
+      status: 'active',
+      connectionStatus: 'connected',
+      disconnectedAt: null,
+      card: null,
+      bingoLineIds: null,
+      openedCellCount: null,
+      isCpu: false,
+    })
+    state.currentPlayerId = 'player-2' // 他人の手番
+    state.assistSuggestions = ['たいやき', 'たぬき', 'たまご']
+    store.roomId = 'room-1'
+    store.myPlayerId = 'player-1'
 
     store.applyGameState(state)
-    await store.fetchWordSuggestions()
+    expect(store.canInput).toBe(false) // 自分の手番ではない
 
-    expect(api.fetchWordSuggestions).toHaveBeenCalledWith('room-1')
-    expect(store.wordSuggestions).toEqual(['りんご', 'りす', 'りぼん'])
+    // 補助モードをONにする
+    store.setAssistMode(true)
+    expect(store.assistMode).toBe(true)
+    // 他人の手番中であっても候補単語が表示される
+    expect(store.wordSuggestions).toEqual(['たいやき', 'たぬき', 'たまご'])
   })
 
   it('手番が移るタイミングで補助モード（候補表示）が自動的にOFFになる', async () => {
@@ -164,18 +189,21 @@ describe('gameStore CPU・補助モード連携', () => {
     state1.phase = 'playing'
     state1.players[0].status = 'active'
     state1.currentPlayerId = 'player-1'
+    state1.assistSuggestions = ['りんご', 'りす', 'りぼん']
     store.roomId = 'room-1'
     store.myPlayerId = 'player-1'
 
     store.applyGameState(state1)
     store.setAssistMode(true)
     expect(store.assistMode).toBe(true)
+    expect(store.wordSuggestions).toEqual(['りんご', 'りす', 'りぼん'])
 
     // 手番が player-2 に移る
     const state2 = {
       ...state1,
       orderIndex: 1,
       currentPlayerId: 'player-2',
+      assistSuggestions: ['たいやき', 'たぬき', 'たまご'],
     }
     store.applyGameState(state2)
 
@@ -183,6 +211,11 @@ describe('gameStore CPU・補助モード連携', () => {
     expect(store.assistMode).toBe(false)
     expect(store.wordSuggestions).toEqual([])
     expect(localStorage.getItem('shiritori-bingo:assist-mode')).toBe('false')
+
+    // 手番が移った後、再度補助モードをONにすると新しい手番の候補が見える
+    store.setAssistMode(true)
+    expect(store.assistMode).toBe(true)
+    expect(store.wordSuggestions).toEqual(['たいやき', 'たぬき', 'たまご'])
   })
 })
 

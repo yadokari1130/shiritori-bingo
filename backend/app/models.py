@@ -203,6 +203,7 @@ class GameState(BaseModel):
     currentTurnTimeLimitMs: int = 0
     currentTurnInputPlayerId: str | None = None
     turnStartedAt: int | None = None
+    assistSuggestions: list[str] = Field(default_factory=list)
     result: GameResult | None = None
     undoHistory: list[UndoSnapshot] = Field(default_factory=list)
 

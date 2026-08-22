@@ -586,10 +586,19 @@ describe('PlayingView タイマー・時間同期', () => {
       ...state1,
       orderIndex: 1,
       currentPlayerId: 'p2',
+      assistSuggestions: ['たいやき', 'たぬき'],
     }
     store.applyGameState(state2)
 
     expect(store.assistMode).toBe(false)
+
+    // 他人の手番中に補助モードをONにすると画面に候補チップが表示される
+    store.setAssistMode(true)
+    const wrapper = mount(PlayingView)
+    const chips = wrapper.findAll('.assist-chip')
+    expect(chips).toHaveLength(2)
+    expect(chips[0].text()).toBe('たいやき')
+    expect(chips[1].text()).toBe('たぬき')
   })
 })
 

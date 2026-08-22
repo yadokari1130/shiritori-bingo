@@ -80,7 +80,7 @@ def test_start_game_with_human_and_cpu():
 
 
 def test_assist_suggestions_api():
-    """GET /api/rooms/{room_id}/assist で候補単語が取得できることを確認。"""
+    """GET /api/rooms/{room_id}/assist および GameState.assistSuggestions で全員共通の候補単語が取得できることを確認。"""
     settings = Settings(cardSize=3)
     with TestClient(app) as host, TestClient(app) as guest:
         res = host.post("/api/rooms", json={"settings": settings.model_dump()})
@@ -95,15 +95,38 @@ def test_assist_suggestions_api():
         assert r_assist_pre.json()["suggestions"] == []
 
         # 開始
-        host.post(f"/api/rooms/{room_id}/start")
+        r_start = host.post(f"/api/rooms/{room_id}/start")
+        assert r_start.status_code == 200
+        start_state = r_start.json()["gameState"]
+        assert "assistSuggestions" in start_state
+        assert isinstance(start_state["assistSuggestions"], list)
+        assert len(start_state["assistSuggestions"]) > 0
 
-        # 対戦中は候補単語が返る
-        r_assist = host.get(f"/api/rooms/{room_id}/assist")
-        assert r_assist.status_code == 200
-        data = r_assist.json()
-        assert "suggestions" in data
-        assert isinstance(data["suggestions"], list)
-        assert len(data["suggestions"]) > 0
+        # ホストとゲストで同一の候補単語が返る
+        r_assist_host = host.get(f"/api/rooms/{room_id}/assist")
+        r_assist_guest = guest.get(f"/api/rooms/{room_id}/assist")
+        assert r_assist_host.status_code == 200
+        assert r_assist_guest.status_code == 200
+        assert r_assist_host.json()["suggestions"] == start_state["assistSuggestions"]
+        assert r_assist_guest.json()["suggestions"] == start_state["assistSuggestions"]
+
+        # スキップして手番交代
+        current_player_id = start_state["currentPlayerId"]
+        r_skip = host.post(
+            f"/api/rooms/{room_id}/action",
+            json={"type": "skip", "subjectId": current_player_id},
+        )
+        assert r_skip.status_code == 200
+        next_state = r_skip.json()["gameState"]
+        assert "assistSuggestions" in next_state
+        assert isinstance(next_state["assistSuggestions"], list)
+        assert len(next_state["assistSuggestions"]) > 0
+
+        # 次の手番でもホストとゲストで共通の候補が返る
+        r_assist_next_host = host.get(f"/api/rooms/{room_id}/assist")
+        r_assist_next_guest = guest.get(f"/api/rooms/{room_id}/assist")
+        assert r_assist_next_host.json()["suggestions"] == next_state["assistSuggestions"]
+        assert r_assist_next_guest.json()["suggestions"] == next_state["assistSuggestions"]
 
 
 def test_kick_cpu_by_host():

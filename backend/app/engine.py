@@ -409,6 +409,26 @@ def _start_turn_timer(state: GameState, now_ms: int) -> None:
     state.turnStartedAt = now_ms
 
 
+def update_assist_suggestions(state: GameState, count: int = 3) -> None:
+    """現在手番に対するおすすめ単語候補を計算して state.assistSuggestions を更新する。"""
+    if state.phase != "playing":
+        state.assistSuggestions = []
+        return
+
+    current_subject = (
+        state.currentPlayerId
+        if state.settings.mode == "individual"
+        else state.currentTeamId
+    )
+    if not current_subject:
+        state.assistSuggestions = []
+        return
+
+    from app.cpu import get_assist_suggestions
+
+    state.assistSuggestions = get_assist_suggestions(state, current_subject, count=count)
+
+
 def _advance_turn(state: GameState, now_ms: int) -> None:
     """現在手番を消化し、次の手番または次のターンへ進める。"""
     state.orderIndex += 1
@@ -419,12 +439,14 @@ def _advance_turn(state: GameState, now_ms: int) -> None:
 
     if not state.roundRoster:
         _set_current_subject(state, None)
+        state.assistSuggestions = []
         return
 
     next_subject = state.roundRoster[state.orderIndex]
     _set_current_subject(state, next_subject)
     state.currentTurnInputPlayerId = None
     _start_turn_timer(state, now_ms)
+    update_assist_suggestions(state)
 
 
 def _check_end_conditions(state: GameState) -> GameResult | None:
@@ -669,6 +691,7 @@ def start_game(state: GameState, now_ms: int) -> GameState:
     _set_current_subject(state, first_subject)
     state.currentTurnInputPlayerId = None
     _start_turn_timer(state, now_ms)
+    update_assist_suggestions(state)
     return state
 
 
@@ -684,6 +707,7 @@ def _apply_invalid_action(state: GameState, now_ms: int) -> GameState:
             state.result = _build_result(state, "all_disqualified", state.round)
             state.phase = "result"
             _set_current_subject(state, None)
+            state.assistSuggestions = []
             return state
     _advance_turn(state, now_ms)
     if state.phase != "result":
@@ -692,6 +716,7 @@ def _apply_invalid_action(state: GameState, now_ms: int) -> GameState:
             state.result = result
             state.phase = "result"
             _set_current_subject(state, None)
+            state.assistSuggestions = []
     return state
 
 
@@ -746,6 +771,7 @@ def process_word(state: GameState, player_id: str, word: str, now_ms: int) -> Ga
         state.result = result
         state.phase = "result"
         _set_current_subject(state, None)
+        state.assistSuggestions = []
     return state
 
 
@@ -760,6 +786,7 @@ def process_skip(state: GameState, now_ms: int) -> GameState:
         state.result = result
         state.phase = "result"
         _set_current_subject(state, None)
+        state.assistSuggestions = []
     return state
 
 
@@ -777,6 +804,7 @@ def process_disqualify(state: GameState, now_ms: int) -> GameState:
         state.result = _build_result(state, "all_disqualified", state.round)
         state.phase = "result"
         _set_current_subject(state, None)
+        state.assistSuggestions = []
         return state
     _advance_turn(state, now_ms)
     result = _check_end_conditions(state)
@@ -784,6 +812,7 @@ def process_disqualify(state: GameState, now_ms: int) -> GameState:
         state.result = result
         state.phase = "result"
         _set_current_subject(state, None)
+        state.assistSuggestions = []
     return state
 
 
@@ -798,6 +827,8 @@ def undo(state: GameState, now_ms: int) -> GameState:
     restored.remainingTimeMs = snapshot.restoredTurnTimeLimitMs
     restored.currentTurnTimeLimitMs = snapshot.restoredTurnTimeLimitMs
     restored.turnStartedAt = now_ms
+    if not restored.assistSuggestions:
+        update_assist_suggestions(restored)
     return restored
 
 

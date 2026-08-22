@@ -355,7 +355,7 @@ function historyKey(entry: { word: string; playerId: string; round: number; sequ
         </div>
 
         <!-- 補助モードの推薦単語チップ -->
-        <div v-if="store.assistMode && store.canInput && store.wordSuggestions.length > 0" class="assist-suggestions-box mt-3">
+        <div v-if="store.assistMode && store.wordSuggestions.length > 0" class="assist-suggestions-box mt-3">
           <span class="assist-suggestions-label">💡 おすすめ単語:</span>
           <div class="assist-chips">
             <button

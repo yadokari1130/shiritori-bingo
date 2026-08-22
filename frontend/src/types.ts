@@ -158,6 +158,7 @@ export interface GameState {
   remainingTimeMs: number
   currentTurnTimeLimitMs: number
   turnStartedAt: number | null
+  assistSuggestions?: string[]
   result: GameResult | null
   hostPlayerId: string | null
   undoHistory?: unknown[]

@@ -183,9 +183,13 @@ export const useGameStore = defineStore('game', () => {
 
     gameState.value = state
     view.value = resolveViewFromPhase(state)
-    if (state.phase === 'playing' && assistMode.value && canInput.value) {
-      void fetchWordSuggestions()
-    } else if (state.phase !== 'playing' || !canInput.value) {
+    if (state.phase === 'playing' && assistMode.value) {
+      if (state.assistSuggestions && state.assistSuggestions.length > 0) {
+        wordSuggestions.value = state.assistSuggestions
+      } else {
+        void fetchWordSuggestions()
+      }
+    } else if (state.phase !== 'playing' || !assistMode.value) {
       wordSuggestions.value = []
     }
     if (notice) {
@@ -556,8 +560,12 @@ export const useGameStore = defineStore('game', () => {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(ASSIST_STORAGE_KEY, String(enabled))
     }
-    if (enabled && canInput.value) {
-      void fetchWordSuggestions()
+    if (enabled && gameState.value?.phase === 'playing') {
+      if (gameState.value.assistSuggestions && gameState.value.assistSuggestions.length > 0) {
+        wordSuggestions.value = gameState.value.assistSuggestions
+      } else {
+        void fetchWordSuggestions()
+      }
     } else {
       wordSuggestions.value = []
     }
@@ -567,6 +575,10 @@ export const useGameStore = defineStore('game', () => {
   async function fetchWordSuggestions(): Promise<void> {
     const id = roomId.value
     if (!id || !assistMode.value) return
+    if (gameState.value?.assistSuggestions && gameState.value.assistSuggestions.length > 0) {
+      wordSuggestions.value = gameState.value.assistSuggestions
+      return
+    }
     try {
       const res = await api.fetchWordSuggestions(id)
       wordSuggestions.value = res.suggestions
