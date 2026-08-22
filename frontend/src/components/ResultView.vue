@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useGameStore } from '../store/game'
+import { useConfirm } from '../composables/useConfirm'
 import BingoCard from './BingoCard.vue'
 import DisconnectedMark from './DisconnectedMark.vue'
 import { buildCharOpenStateColumns, collectOpenedChars } from '../utils/bingo'
 import { isSmallKana } from '../utils/shiritori'
 
 const store = useGameStore()
+const { showConfirm } = useConfirm()
 
 const showCards = ref(true)
 const showCharTable = ref(true)
@@ -97,9 +99,12 @@ async function onReturnToLobby(): Promise<void> {
 
 async function onGoToTop(): Promise<void> {
   if (store.myPlayer) {
-    if (!confirm('トップ画面へ戻りますか？')) {
-      return
-    }
+    const ok = await showConfirm({
+      title: 'トップ画面へ戻る',
+      message: 'トップ画面へ戻りますか？',
+      confirmText: '戻る',
+    })
+    if (!ok) return
   }
   await store.leaveAndGoToTop()
 }

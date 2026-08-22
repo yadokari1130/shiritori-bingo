@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useGameStore } from '../store/game'
+import { useConfirm } from '../composables/useConfirm'
 import { buildCardCharPool, maxCardSize } from '../utils/shiritori'
 import type { Settings } from '../types'
 import RuleSettingsForm from './RuleSettingsForm.vue'
@@ -8,6 +9,7 @@ import DisconnectedMark from './DisconnectedMark.vue'
 import RuleExplanationModal from './RuleExplanationModal.vue'
 
 const store = useGameStore()
+const { showConfirm } = useConfirm()
 
 const editingName = ref('')
 const editNameError = ref('')
@@ -135,16 +137,23 @@ async function onStartGame(): Promise<void> {
 }
 
 async function onChangeHost(playerId: string, playerName: string): Promise<void> {
-  if (!confirm(`${playerName} さんを親（ホスト）に変更しますか？`)) {
-    return
-  }
+  const ok = await showConfirm({
+    title: '親（ホスト）の変更',
+    message: `${playerName} さんを親（ホスト）に変更しますか？`,
+    confirmText: '変更する',
+  })
+  if (!ok) return
   await store.changeHost(playerId)
 }
 
 async function onKickPlayer(playerId: string, playerName: string): Promise<void> {
-  if (!confirm(`${playerName} さんを強制退出させますか？`)) {
-    return
-  }
+  const ok = await showConfirm({
+    title: '参加者の強制退出',
+    message: `${playerName} さんを強制退出させますか？`,
+    confirmText: '退出させる',
+    danger: true,
+  })
+  if (!ok) return
   await store.kickPlayer(playerId)
 }
 
@@ -185,17 +194,24 @@ function formatWordLengthLimit(settings: Settings): string {
 
 async function onGoToTop(): Promise<void> {
   if (store.myPlayer) {
-    if (!confirm('ロビーから退出してトップ画面へ戻りますか？')) {
-      return
-    }
+    const ok = await showConfirm({
+      title: 'ロビーからの退出',
+      message: 'ロビーから退出してトップ画面へ戻りますか？',
+      confirmText: '退出する',
+    })
+    if (!ok) return
   }
   await store.leaveAndGoToTop()
 }
 
 async function onDissolveRoom(): Promise<void> {
-  if (!confirm('部屋を解散しますか？\n部屋は削除され、参加者全員が退出となります。')) {
-    return
-  }
+  const ok = await showConfirm({
+    title: '部屋の解散',
+    message: '部屋を解散しますか？\n部屋は削除され、参加者全員が退出となります。',
+    confirmText: '解散する',
+    danger: true,
+  })
+  if (!ok) return
   await store.dissolveRoom()
 }
 </script>

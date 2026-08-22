@@ -6,6 +6,7 @@ import TopView from './components/TopView.vue'
 import LobbyView from './components/LobbyView.vue'
 import PlayingView from './components/PlayingView.vue'
 import ResultView from './components/ResultView.vue'
+import ConfirmModal from './components/ConfirmModal.vue'
 
 const store = useGameStore()
 
@@ -37,6 +38,7 @@ onUnmounted(() => {
         <ResultView v-else-if="store.view === 'result'" />
       </main>
     </div>
+    <ConfirmModal />
   </div>
 </template>
 

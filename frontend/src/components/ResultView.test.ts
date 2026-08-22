@@ -1,14 +1,20 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import ResultView from './ResultView.vue'
+import ConfirmModal from './ConfirmModal.vue'
 import { useGameStore } from '../store/game'
 import { createDefaultSettings } from '../types'
 
 describe('ResultView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    document.body.innerHTML = ''
+  })
+
+  afterEach(() => {
+    document.body.innerHTML = ''
   })
 
   function factory() {
@@ -29,7 +35,19 @@ describe('ResultView', () => {
       hasPassword: false,
       hostPlayerId: 'host',
       freeChar: 'あ',
-      players: [],
+      players: [
+        {
+          id: 'player-1',
+          name: 'テストプレイヤー',
+          teamId: null,
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: null,
+          bingoLineIds: [],
+          openedCellCount: 0,
+        },
+      ],
       teams: [],
       playOrder: [],
       round: 1,
@@ -93,6 +111,7 @@ describe('ResultView', () => {
       global: {
         plugins: [pinia],
       },
+      attachTo: document.body,
     })
     return { wrapper, store }
   }
@@ -131,6 +150,8 @@ describe('ResultView', () => {
     expect(cells[4].text()).toBe('よ')
     expect(cells[4].classes()).toContain('is-open')
     expect(cells[4].classes()).not.toContain('is-blank')
+
+    wrapper.unmount()
   })
 
   it('特殊文字（ゃゅょっー）の列で伸ばし棒などが正しく配置される', async () => {
@@ -149,12 +170,15 @@ describe('ResultView', () => {
     expect(cells[2].text()).toBe('ょ')
     expect(cells[3].text()).toBe('っ')
     expect(cells[4].text()).toBe('ー')
+
+    wrapper.unmount()
   })
 
-  it('ヘッダーおよび最下部に「トップに戻る」ボタンが表示され、クリック時に leaveAndGoToTop が実行される', async () => {
+  it('ヘッダーおよび最下部に「トップに戻る」ボタンが表示され、確認ダイアログ確定で leaveAndGoToTop が実行される', async () => {
+    const modalWrapper = mount(ConfirmModal, { attachTo: document.body })
     const { wrapper, store } = factory()
+    store.myPlayerId = 'player-1'
     const leaveSpy = vi.spyOn(store, 'leaveAndGoToTop').mockResolvedValue()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     // ヘッダーとフッターにトップに戻るボタンが存在することを確認
     const topButtons = wrapper.findAll('button').filter((btn) => btn.text().includes('トップに戻る'))
@@ -162,11 +186,30 @@ describe('ResultView', () => {
 
     // ヘッダーのボタンをクリック
     await topButtons[0].trigger('click')
+    await modalWrapper.vm.$nextTick()
+
+    expect(document.body.querySelector('.confirm-modal-backdrop')).not.toBeNull()
+    expect(document.body.querySelector('.confirm-modal-title')?.textContent).toBe('トップ画面へ戻る')
+    expect(document.body.querySelector('.confirm-modal-message')?.textContent).toContain('トップ画面へ戻りますか？')
+
+    const confirmBtn = document.body.querySelector('.modal-confirm-button') as HTMLButtonElement
+    confirmBtn.click()
+
+    await wrapper.vm.$nextTick()
     expect(leaveSpy).toHaveBeenCalledTimes(1)
 
     // 最下部のアクションボタンをクリック
     await topButtons[1].trigger('click')
+    await modalWrapper.vm.$nextTick()
+
+    const confirmBtn2 = document.body.querySelector('.modal-confirm-button') as HTMLButtonElement
+    confirmBtn2.click()
+
+    await wrapper.vm.$nextTick()
     expect(leaveSpy).toHaveBeenCalledTimes(2)
+
+    modalWrapper.unmount()
+    wrapper.unmount()
   })
 
   it('ホスト（親）の場合は「ロビーに戻る（親のみ）」ボタンが表示され、非ホストの場合は表示されない', async () => {
@@ -198,6 +241,8 @@ describe('ResultView', () => {
     expect(store.isHost).toBe(false)
     const noLobbyBtn = wrapper.findAll('button').find((btn) => btn.text().includes('ロビーに戻る（親のみ）'))
     expect(noLobbyBtn).toBeUndefined()
+
+    wrapper.unmount()
   })
 
   it('CPUプレイヤーは順位表に🤖 CPUバッジが表示され、ホストにはならない', async () => {
@@ -226,7 +271,7 @@ describe('ResultView', () => {
     const cpuBadge = wrapper.find('.cpu-badge')
     expect(cpuBadge.exists()).toBe(true)
     expect(cpuBadge.text()).toContain('🤖 CPU')
+
+    wrapper.unmount()
   })
 })
-
-
