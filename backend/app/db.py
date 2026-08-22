@@ -6,8 +6,8 @@ from pathlib import Path
 
 from tortoise import Tortoise
 
-from app.config import get_tortoise_config
 from app import dao
+from app.config import get_tortoise_config
 
 DB_PATH = Path(os.environ.get("DATABASE_PATH", Path(__file__).resolve().parent.parent / "data" / "shiritori-bingo.db"))
 _write_lock = asyncio.Lock()

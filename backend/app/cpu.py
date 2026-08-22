@@ -7,15 +7,12 @@ MeCab IPADIC由来の名詞辞書（nouns.json）を活用し、
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import random
-from typing import Sequence
+from collections.abc import Sequence
+from pathlib import Path
 
 from app.engine import (
     DAKUTEN_MAP,
-    compute_bingo_lines,
-    count_open_cells,
-    is_valid_word_length,
     line_definitions,
     normalize_tail,
 )

@@ -10,6 +10,7 @@ describe('TopView', () => {
     setActivePinia(createPinia())
     window.history.replaceState(null, '', '/game/room123')
     vi.spyOn(api, 'fetchRoomInfo').mockResolvedValue({
+      roomId: 'room123',
       phase: 'setup',
       hasPassword: false,
     })
@@ -48,6 +49,7 @@ describe('TopView', () => {
       isHost: true,
       gameState: {
         phase: 'setup',
+        hasPassword: false,
         settings: {
           mode: 'individual',
           teamCount: 2,
@@ -204,6 +206,7 @@ describe('TopView', () => {
   it('専用URLでパスワードが必要なルーム（hasPassword: true）の場合、パスワード入力欄が表示される', async () => {
     vi.spyOn(api, 'joinRoom').mockRejectedValue(new api.ApiError('名前を入力してください', 400))
     vi.spyOn(api, 'fetchRoomInfo').mockResolvedValue({
+      roomId: 'room123',
       phase: 'setup',
       hasPassword: true,
     })
@@ -224,5 +227,3 @@ describe('TopView', () => {
     expect(wrapper.find('#dedicatedJoinPassword').exists()).toBe(true)
   })
 })
-
-

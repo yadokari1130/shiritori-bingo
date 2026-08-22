@@ -9,6 +9,7 @@ import { createDefaultSettings, type GameState } from '../types'
 function createLobbyState(overrides: Partial<GameState> = {}): GameState {
   return {
     phase: 'setup',
+    hasPassword: false,
     settings: {
       ...createDefaultSettings(),
       mode: 'individual',

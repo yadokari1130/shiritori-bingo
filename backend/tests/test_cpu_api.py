@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from app import dao, db
 from app.main import app
@@ -191,7 +191,7 @@ def test_cpu_never_becomes_host_on_leave():
         room_id = res.json()["roomId"]
 
         r_host = host.post(f"/api/rooms/{room_id}/join", json={"name": "HostPlayer"})
-        host_pid = r_host.json()["playerId"]
+        assert r_host.status_code == 200
 
         # CPUを追加（参加順: HostPlayer -> CPU 1）
         r_cpu = host.post(f"/api/rooms/{room_id}/cpu")

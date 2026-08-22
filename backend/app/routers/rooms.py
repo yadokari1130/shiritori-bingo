@@ -130,7 +130,7 @@ async def _run_cpu_turn(room_id: str, expected_round: int, expected_order_index:
                 opened_count = len(state.wordHistory[-1].openedChars)
                 p_name = next((p.name for p in state.players if p.id == cpu_player_id), "CPU")
                 notice = f"🤖 {p_name} が「{best_word}」を入力しました（{opened_count}マス開放）。"
-            except Exception:
+            except ValueError:
                 engine.process_skip(state, now)
                 notice = "🤖 手詰まりのためスキップしました。"
         else:
@@ -922,7 +922,7 @@ async def _wait_for_disconnect(request: Request) -> None:
             message = await request._receive()
             if message.get("type") == "http.disconnect":
                 return
-        except Exception:
+        except Exception:  # noqa: BLE001
             return
 
 
@@ -998,7 +998,7 @@ async def events(room_id: str, request: Request):
 
             while not disconnect_task.done():
                 get_task = asyncio.create_task(queue.get())
-                done, pending = await asyncio.wait(
+                done, _pending = await asyncio.wait(
                     [get_task, disconnect_task],
                     timeout=3.0,
                     return_when=asyncio.FIRST_COMPLETED,

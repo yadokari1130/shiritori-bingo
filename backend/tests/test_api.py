@@ -897,6 +897,7 @@ def test_undo_max_history_limit():
 
         # undoHistoryが最大5件以内であること（内部状態の検証）
         import asyncio
+
         from app import dao
         loaded = asyncio.run(dao.load_room_state(room_id))
         assert loaded is not None

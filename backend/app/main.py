@@ -111,7 +111,7 @@ async def health() -> dict[str, str]:
         conn = Tortoise.get_connection("default")
         await conn.execute_query("SELECT 1")
         return {"status": "ok", "db": "connected"}
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.error(f"Health check DB failed: {exc}")
         return JSONResponse(
             status_code=503,

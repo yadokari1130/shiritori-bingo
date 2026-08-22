@@ -38,7 +38,7 @@ def test_nouns_json_structure_and_validity() -> None:
     total_count = 0
 
     # 開始文字として無効なキーが存在しないこと
-    for head_char in data.keys():
+    for head_char in data:
         assert (
             head_char not in INVALID_HEAD_CHARS
         ), f"無効な頭文字キーが含まれています: {head_char}"

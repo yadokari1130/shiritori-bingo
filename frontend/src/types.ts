@@ -169,6 +169,14 @@ export interface AssistResponse {
   suggestions: string[]
 }
 
+/** SSE ペイロード */
+export interface SsePayload {
+  event: 'initial' | 'update' | 'ping' | 'dissolved'
+  gameState: GameState
+  notice?: string
+  timestamp?: number
+}
+
 /** 接続状態 */
 export type SseConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
