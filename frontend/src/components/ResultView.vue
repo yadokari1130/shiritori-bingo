@@ -108,9 +108,9 @@ async function onReturnToLobby(): Promise<void> {
 async function onGoToTop(): Promise<void> {
   if (store.myPlayer) {
     const ok = await showConfirm({
-      title: 'トップ画面へ戻る',
-      message: 'トップ画面へ戻りますか？',
-      confirmText: '戻る',
+      title: '部屋を抜ける',
+      message: '部屋から抜けてトップ画面へ戻りますか？',
+      confirmText: '抜ける',
     })
     if (!ok)
       return
@@ -133,7 +133,7 @@ async function onGoToTop(): Promise<void> {
           class="secondary-button header-btn"
           @click="onGoToTop"
         >
-          トップに戻る
+          部屋を抜ける
         </button>
         <div class="header-mark">
           結果
@@ -350,7 +350,7 @@ async function onGoToTop(): Promise<void> {
         class="secondary-button btn-lg"
         @click="onGoToTop"
       >
-        トップに戻る
+        部屋を抜ける
       </button>
     </div>
   </div>

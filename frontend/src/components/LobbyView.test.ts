@@ -189,7 +189,7 @@ describe('lobbyView', () => {
     hostWrapper.unmount()
   })
 
-  it('トップに戻るボタンを押すとカスタム確認ダイアログが表示され、確定でleaveAndGoToTopが実行される', async () => {
+  it('部屋を抜けるボタンを押すとカスタム確認ダイアログが表示され、確定でleaveAndGoToTopが実行される', async () => {
     const store = useGameStore()
     store.roomId = 'room-123'
     store.myPlayerId = 'p2'
@@ -199,14 +199,14 @@ describe('lobbyView', () => {
     const modalWrapper = mount(ConfirmModal, { attachTo: document.body })
     const guestWrapper = mount(LobbyView, { attachTo: document.body })
 
-    const leaveBtn = guestWrapper.findAll('button').find(b => b.text().includes('トップに戻る'))
+    const leaveBtn = guestWrapper.findAll('button').find(b => b.text().includes('部屋を抜ける'))
     expect(leaveBtn).toBeDefined()
     await leaveBtn!.trigger('click')
     await modalWrapper.vm.$nextTick()
 
     expect(document.body.querySelector('.confirm-modal-backdrop')).not.toBeNull()
-    expect(document.body.querySelector('.confirm-modal-title')?.textContent).toBe('ロビーからの退出')
-    expect(document.body.querySelector('.confirm-modal-message')?.textContent).toContain('ロビーから退出してトップ画面へ戻りますか？')
+    expect(document.body.querySelector('.confirm-modal-title')?.textContent).toBe('部屋を抜ける')
+    expect(document.body.querySelector('.confirm-modal-message')?.textContent).toContain('部屋から抜けてトップ画面へ戻りますか？')
 
     const confirmBtn = document.body.querySelector('.modal-confirm-button') as HTMLButtonElement
     confirmBtn.click()

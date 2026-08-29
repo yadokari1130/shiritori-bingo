@@ -174,14 +174,14 @@ describe('resultView', () => {
     wrapper.unmount()
   })
 
-  it('ヘッダーおよび最下部に「トップに戻る」ボタンが表示され、確認ダイアログ確定で leaveAndGoToTop が実行される', async () => {
+  it('ヘッダーおよび最下部に「部屋を抜ける」ボタンが表示され、確認ダイアログ確定で leaveAndGoToTop が実行される', async () => {
     const modalWrapper = mount(ConfirmModal, { attachTo: document.body })
     const { wrapper, store } = factory()
     store.myPlayerId = 'player-1'
     const leaveSpy = vi.spyOn(store, 'leaveAndGoToTop').mockResolvedValue()
 
-    // ヘッダーとフッターにトップに戻るボタンが存在することを確認
-    const topButtons = wrapper.findAll('button').filter(btn => btn.text().includes('トップに戻る'))
+    // ヘッダーとフッターに部屋を抜けるボタンが存在することを確認
+    const topButtons = wrapper.findAll('button').filter(btn => btn.text().includes('部屋を抜ける'))
     expect(topButtons.length).toBe(2)
 
     // ヘッダーのボタンをクリック
@@ -189,8 +189,8 @@ describe('resultView', () => {
     await modalWrapper.vm.$nextTick()
 
     expect(document.body.querySelector('.confirm-modal-backdrop')).not.toBeNull()
-    expect(document.body.querySelector('.confirm-modal-title')?.textContent).toBe('トップ画面へ戻る')
-    expect(document.body.querySelector('.confirm-modal-message')?.textContent).toContain('トップ画面へ戻りますか？')
+    expect(document.body.querySelector('.confirm-modal-title')?.textContent).toBe('部屋を抜ける')
+    expect(document.body.querySelector('.confirm-modal-message')?.textContent).toContain('部屋から抜けてトップ画面へ戻りますか？')
 
     const confirmBtn = document.body.querySelector('.modal-confirm-button') as HTMLButtonElement
     confirmBtn.click()

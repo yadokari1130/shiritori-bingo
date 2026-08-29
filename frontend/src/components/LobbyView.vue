@@ -241,9 +241,9 @@ function formatWordLengthLimit(settings: Settings): string {
 async function onGoToTop(): Promise<void> {
   if (store.myPlayer) {
     const ok = await showConfirm({
-      title: 'ロビーからの退出',
-      message: 'ロビーから退出してトップ画面へ戻りますか？',
-      confirmText: '退出する',
+      title: '部屋を抜ける',
+      message: '部屋から抜けてトップ画面へ戻りますか？',
+      confirmText: '抜ける',
     })
     if (!ok)
       return
@@ -284,7 +284,7 @@ async function onDissolveRoom(): Promise<void> {
           class="secondary-button header-btn"
           @click="onGoToTop"
         >
-          トップに戻る
+          部屋を抜ける
         </button>
         <button
           v-if="store.isHost"
