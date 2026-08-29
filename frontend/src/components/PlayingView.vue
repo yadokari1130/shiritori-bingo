@@ -50,7 +50,6 @@ const remainingMs = computed(() => {
   const state = store.gameState
   if (!state || state.phase !== 'playing')
     return 0
-
   if (state.turnStartedAt !== null && state.turnStartedAt !== undefined && state.currentTurnTimeLimitMs > 0) {
     const serverNow = now.value + store.serverTimeOffset
     const elapsed = Math.max(0, serverNow - state.turnStartedAt)
@@ -79,16 +78,7 @@ watch(timerExpired, (expired) => {
   }
 })
 
-const currentPlayerName = computed(() => {
-  if (!store.gameState)
-    return ''
-  if (store.gameState.settings.mode === 'individual') {
-    const p = store.gameState.players.find(pl => pl.id === store.gameState!.currentPlayerId)
-    return p?.name ?? ''
-  }
-  const idx = store.gameState.teams.findIndex(t => t.id === store.gameState!.currentTeamId)
-  return idx >= 0 ? `チーム ${idx + 1}` : ''
-})
+const currentPlayerName = computed(() => store.currentSubjectName)
 
 const currentSubjectId = computed(() => {
   if (!store.gameState)
@@ -117,9 +107,9 @@ const orderedCards = computed(() => {
   }
   return store.orderedTeams
     .filter(t => Boolean(t.card))
-    .map((t, idx) => ({
+    .map(t => ({
       id: t.id,
-      title: `チーム ${idx + 1}`,
+      title: store.getTeamName(t.id),
       subtitle: undefined,
       disconnected: false,
       members: t.memberPlayerIds

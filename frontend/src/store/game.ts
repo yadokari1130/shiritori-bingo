@@ -64,6 +64,13 @@ export const useGameStore = defineStore('game', () => {
     return !!gameState.value?.hasPassword
   })
 
+  function getTeamName(teamId: string): string {
+    if (!gameState.value)
+      return ''
+    const idx = gameState.value.teams.findIndex(t => t.id === teamId)
+    return idx >= 0 ? `チーム ${idx + 1}` : ''
+  }
+
   const currentSubjectName = computed(() => {
     if (!gameState.value)
       return ''
@@ -72,8 +79,7 @@ export const useGameStore = defineStore('game', () => {
       return p?.name ?? ''
     }
     if (gameState.value.settings.mode === 'team' && gameState.value.currentTeamId) {
-      const idx = gameState.value.teams.findIndex(t => t.id === gameState.value!.currentTeamId)
-      return idx >= 0 ? `チーム ${idx + 1}` : ''
+      return getTeamName(gameState.value.currentTeamId)
     }
     return ''
   })
@@ -696,6 +702,7 @@ export const useGameStore = defineStore('game', () => {
     orderedPlayers,
     orderedTeams,
     hasPassword,
+    getTeamName,
     // actions
     applyGameState,
     createRoom,

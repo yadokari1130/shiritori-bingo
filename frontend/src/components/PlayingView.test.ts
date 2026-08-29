@@ -600,4 +600,100 @@ describe('playingView タイマー・時間同期', () => {
     expect(chips[0].text()).toBe('たいやき')
     expect(chips[1].text()).toBe('たぬき')
   })
+
+  it('チーム戦で手番順（playOrder）がシャッフルされてもビンゴカードとサイドバーのチーム名が元のチーム名で正しく表示される', async () => {
+    const store = useGameStore()
+    store.myPlayerId = 'p1'
+    const settings = {
+      ...createDefaultSettings(),
+      mode: 'team' as const,
+      teamCount: 2,
+    }
+
+    // team-1（チーム 1）と team-2（チーム 2）が存在し、手番順が [team-2, team-1] にシャッフルされた状態
+    store.applyGameState({
+      phase: 'playing',
+      settings,
+      hostPlayerId: 'p1',
+      hasPassword: false,
+      freeChar: 'あ',
+      players: [
+        {
+          id: 'p1',
+          name: '太郎',
+          teamId: 'team-1',
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: null,
+          bingoLineIds: null,
+          openedCellCount: null,
+        },
+        {
+          id: 'p2',
+          name: '次郎',
+          teamId: 'team-2',
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: null,
+          bingoLineIds: null,
+          openedCellCount: null,
+        },
+      ],
+      teams: [
+        {
+          id: 'team-1',
+          memberPlayerIds: ['p1'],
+          status: 'active',
+          card: { size: 3, cells: [], freeChar: 'あ' },
+          bingoLineIds: [],
+          openedCellCount: 1,
+        },
+        {
+          id: 'team-2',
+          memberPlayerIds: ['p2'],
+          status: 'active',
+          card: { size: 3, cells: [], freeChar: 'あ' },
+          bingoLineIds: [],
+          openedCellCount: 1,
+        },
+      ],
+      playOrder: ['team-2', 'team-1'], // 1番手が team-2、2番手が team-1
+      round: 1,
+      roundRoster: ['team-2', 'team-1'],
+      orderIndex: 0,
+      currentPlayerId: null,
+      currentTeamId: 'team-2',
+      requiredStartChar: 'あ',
+      usedWords: [],
+      wordHistory: [],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: Date.now(),
+      result: null,
+      undoHistory: [],
+    })
+
+    const wrapper = mount(PlayingView)
+
+    // 現在の手番表示が「チーム 2」になっていること
+    const summaryCards = wrapper.findAll('.summary-card')
+    expect(summaryCards[0].text()).toContain('チーム 2')
+
+    // ビンゴカード一覧のタイトル検証
+    const cards = wrapper.findAllComponents({ name: 'BingoCard' })
+    expect(cards).toHaveLength(2)
+    // 1番手（team-2）のカードタイトルが「チーム 2」であること（手番順インデックス「チーム 1」ではない）
+    expect(cards[0].props('title')).toBe('チーム 2')
+    // 2番手（team-1）のカードタイトルが「チーム 1」であること（手番順インデックス「チーム 2」ではない）
+    expect(cards[1].props('title')).toBe('チーム 1')
+
+    // サイドバーのしりとり順リストのテキスト検証
+    const orderItems = wrapper.findAll('.order-list li')
+    expect(orderItems).toHaveLength(2)
+    expect(orderItems[0].text()).toContain('チーム 2')
+    expect(orderItems[1].text()).toContain('チーム 1')
+  })
 })

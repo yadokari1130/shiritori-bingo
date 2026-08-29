@@ -274,4 +274,162 @@ describe('resultView', () => {
 
     wrapper.unmount()
   })
+
+  it('チーム戦の結果画面で順位表およびビンゴカードのチーム名が正しく表示される', async () => {
+    const pinia = createPinia()
+    const store = useGameStore(pinia)
+    const settings = {
+      ...createDefaultSettings(),
+      mode: 'team' as const,
+      teamCount: 2,
+    }
+
+    store.gameState = {
+      phase: 'result',
+      settings,
+      hasPassword: false,
+      hostPlayerId: 'player-1',
+      freeChar: 'あ',
+      players: [
+        {
+          id: 'player-1',
+          name: '太郎',
+          teamId: 'team-1',
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: null,
+          bingoLineIds: [],
+          openedCellCount: 0,
+        },
+        {
+          id: 'player-2',
+          name: '次郎',
+          teamId: 'team-2',
+          status: 'active',
+          connectionStatus: 'connected',
+          disconnectedAt: null,
+          card: null,
+          bingoLineIds: [],
+          openedCellCount: 0,
+        },
+      ],
+      teams: [],
+      playOrder: [],
+      round: 3,
+      roundRoster: [],
+      orderIndex: 0,
+      currentPlayerId: null,
+      currentTeamId: null,
+      requiredStartChar: 'あ',
+      usedWords: [],
+      remainingTimeMs: 0,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: null,
+      wordHistory: [],
+      undoHistory: [],
+      result: {
+        reason: 'bingos',
+        endRound: 3,
+        achieverPlayerIds: [],
+        achieverTeamIds: ['team-2'],
+        rankings: [
+          {
+            rank: 1,
+            subjectType: 'team',
+            subjectId: 'team-2',
+            bingoCount: 1,
+            openedCellCount: 5,
+            status: 'active',
+          },
+          {
+            rank: 2,
+            subjectType: 'team',
+            subjectId: 'team-1',
+            bingoCount: 0,
+            openedCellCount: 3,
+            status: 'active',
+          },
+        ],
+        snapshot: {
+          settings,
+          freeChar: 'あ',
+          players: [
+            {
+              playerId: 'player-1',
+              name: '太郎',
+              teamId: 'team-1',
+              status: 'active',
+              bingoLineIds: [],
+              openedCellCount: 3,
+              connectionStatus: 'connected',
+              card: null,
+            },
+            {
+              playerId: 'player-2',
+              name: '次郎',
+              teamId: 'team-2',
+              status: 'active',
+              bingoLineIds: [],
+              openedCellCount: 5,
+              connectionStatus: 'connected',
+              card: null,
+            },
+          ],
+          teams: [
+            {
+              teamId: 'team-1',
+              memberPlayerIds: ['player-1'],
+              status: 'active',
+              bingoLineIds: [],
+              openedCellCount: 3,
+              card: {
+                size: 3,
+                freeChar: 'あ',
+                cells: [],
+              },
+            },
+            {
+              teamId: 'team-2',
+              memberPlayerIds: ['player-2'],
+              status: 'active',
+              bingoLineIds: ['row-0'],
+              openedCellCount: 5,
+              card: {
+                size: 3,
+                freeChar: 'あ',
+                cells: [],
+              },
+            },
+          ],
+          wordHistory: [],
+        },
+      },
+    }
+
+    const wrapper = mount(ResultView, {
+      global: {
+        plugins: [pinia],
+      },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    // 順位表の確認：1位が「チーム 2」、2位が「チーム 1」
+    const rows = wrapper.findAll('.ranking-table tbody tr')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text()).toContain('1位')
+    expect(rows[0].text()).toContain('チーム 2')
+    expect(rows[1].text()).toContain('2位')
+    expect(rows[1].text()).toContain('チーム 1')
+
+    // ビンゴカードのタイトル確認
+    const cards = wrapper.findAllComponents({ name: 'BingoCard' })
+    expect(cards).toHaveLength(2)
+    expect(cards[0].props('title')).toBe('チーム 1')
+    expect(cards[1].props('title')).toBe('チーム 2')
+
+    wrapper.unmount()
+  })
 })

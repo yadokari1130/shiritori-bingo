@@ -53,21 +53,24 @@ const orderedResults = computed(() => {
   }
   return snapshot.value.teams
     .filter((t): t is typeof t & { card: NonNullable<typeof t.card> } => Boolean(t.card))
-    .map((t, idx) => ({
-      id: t.teamId,
-      title: `チーム ${idx + 1}`,
-      subtitle: undefined,
-      disconnected: false,
-      members: t.memberPlayerIds
-        .map(id => snapshot.value!.players.find(p => p.playerId === id))
-        .filter((player): player is NonNullable<typeof player> => Boolean(player))
-        .map(player => ({
-          name: player.isCpu ? `🤖 ${player.name}` : player.name,
-          disconnected: player.connectionStatus === 'disconnected',
-        })),
-      card: t.card,
-      disqualified: t.status === 'disqualified',
-    }))
+    .map((t) => {
+      const idx = snapshot.value!.teams.findIndex(tm => tm.teamId === t.teamId)
+      return {
+        id: t.teamId,
+        title: idx >= 0 ? `チーム ${idx + 1}` : 'チーム',
+        subtitle: undefined,
+        disconnected: false,
+        members: t.memberPlayerIds
+          .map(id => snapshot.value!.players.find(p => p.playerId === id))
+          .filter((player): player is NonNullable<typeof player> => Boolean(player))
+          .map(player => ({
+            name: player.isCpu ? `🤖 ${player.name}` : player.name,
+            disconnected: player.connectionStatus === 'disconnected',
+          })),
+        card: t.card,
+        disqualified: t.status === 'disqualified',
+      }
+    })
 })
 
 const charColumns = computed(() => {

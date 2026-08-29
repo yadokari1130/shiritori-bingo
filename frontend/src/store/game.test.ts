@@ -305,4 +305,33 @@ describe('game ストア', () => {
     expect(store.gameState?.settings.cardSize).toBe(3)
     expect(store.gameState?.settings.minWordLength).toBe(3)
   })
+
+  it('getTeamName: 登録順に基づくチーム名を正しく取得できる', () => {
+    const store = useGameStore()
+    store.applyGameState(createMockGameState({
+      teams: [
+        { id: 'team-a', memberPlayerIds: ['p1'], status: 'active', card: null, bingoLineIds: [], openedCellCount: 0 },
+        { id: 'team-b', memberPlayerIds: ['p2'], status: 'active', card: null, bingoLineIds: [], openedCellCount: 0 },
+      ],
+    }))
+
+    expect(store.getTeamName('team-a')).toBe('チーム 1')
+    expect(store.getTeamName('team-b')).toBe('チーム 2')
+    expect(store.getTeamName('unknown-team')).toBe('')
+  })
+
+  it('currentSubjectName: チーム戦の場合、currentTeamIdに対応するチーム名を返す', () => {
+    const store = useGameStore()
+    const settings = { ...createDefaultSettings(), mode: 'team' as const, teamCount: 2 }
+    store.applyGameState(createMockGameState({
+      settings,
+      teams: [
+        { id: 'team-a', memberPlayerIds: ['p1'], status: 'active', card: null, bingoLineIds: [], openedCellCount: 0 },
+        { id: 'team-b', memberPlayerIds: ['p2'], status: 'active', card: null, bingoLineIds: [], openedCellCount: 0 },
+      ],
+      currentTeamId: 'team-b',
+    }))
+
+    expect(store.currentSubjectName).toBe('チーム 2')
+  })
 })
