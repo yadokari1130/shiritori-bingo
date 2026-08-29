@@ -293,3 +293,85 @@ def test_return_to_lobby_cpu_never_becomes_host():
         gs = r_lobby.json()["gameState"]
         assert gs["hostPlayerId"] == host_pid
         assert not any(p["id"] == gs["hostPlayerId"] and p.get("isCpu") for p in gs["players"])
+
+
+def test_delete_all_cpus_by_host():
+    """親が複数のCPUを一括削除できることを確認。"""
+    settings = Settings(cardSize=3)
+    with TestClient(app) as host, TestClient(app) as guest:
+        res = host.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+
+        host.post(f"/api/rooms/{room_id}/join", json={"name": "HostPlayer"})
+        guest.post(f"/api/rooms/{room_id}/join", json={"name": "GuestPlayer"})
+
+        # CPUを3体追加
+        host.post(f"/api/rooms/{room_id}/cpu")
+        host.post(f"/api/rooms/{room_id}/cpu")
+        host.post(f"/api/rooms/{room_id}/cpu")
+
+        # ゲストが一括削除を試みる -> 403
+        r_guest_delete = guest.delete(f"/api/rooms/{room_id}/cpu")
+        assert r_guest_delete.status_code == 403
+
+        # ホストが一括削除
+        r_delete = host.delete(f"/api/rooms/{room_id}/cpu")
+        assert r_delete.status_code == 200
+        players_after = r_delete.json()["gameState"]["players"]
+        assert len(players_after) == 2
+        assert not any(p.get("isCpu") for p in players_after)
+        assert [p["name"] for p in players_after] == ["HostPlayer", "GuestPlayer"]
+
+        # CPUが0体の状態で再度一括削除 -> 正常終了 (200)
+        r_delete_empty = host.delete(f"/api/rooms/{room_id}/cpu")
+        assert r_delete_empty.status_code == 200
+        assert len(r_delete_empty.json()["gameState"]["players"]) == 2
+
+
+def test_delete_all_cpus_in_team_mode():
+    """チーム戦においてCPUを一括削除した際、チームメンバー一覧からも削除されることを確認。"""
+    settings = Settings(cardSize=3, mode="team", teamCount=2)
+    with TestClient(app) as host:
+        res = host.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+
+        host.post(f"/api/rooms/{room_id}/join", json={"name": "HostPlayer"})
+        # CPUを2体追加
+        host.post(f"/api/rooms/{room_id}/cpu")
+        host.post(f"/api/rooms/{room_id}/cpu")
+
+        # チーム振り分け
+        r_rand = host.post(f"/api/rooms/{room_id}/teams/randomize")
+        assert r_rand.status_code == 200
+        teams_before = r_rand.json()["gameState"]["teams"]
+        all_member_ids_before = [
+            pid for t in teams_before for pid in t["memberPlayerIds"]
+        ]
+        assert len(all_member_ids_before) == 3
+
+        # CPU一括削除
+        r_del = host.delete(f"/api/rooms/{room_id}/cpu")
+        assert r_del.status_code == 200
+        gs_after = r_del.json()["gameState"]
+        assert len(gs_after["players"]) == 1
+        all_member_ids_after = [
+            pid for t in gs_after["teams"] for pid in t["memberPlayerIds"]
+        ]
+        assert len(all_member_ids_after) == 1
+
+
+def test_delete_all_cpus_during_playing_forbidden():
+    """ゲーム進行中（playingフェーズ）はCPU一括削除できないことを確認。"""
+    settings = Settings(cardSize=3)
+    with TestClient(app) as host:
+        res = host.post("/api/rooms", json={"settings": settings.model_dump()})
+        room_id = res.json()["roomId"]
+
+        host.post(f"/api/rooms/{room_id}/join", json={"name": "HostPlayer"})
+        host.post(f"/api/rooms/{room_id}/cpu")
+        host.post(f"/api/rooms/{room_id}/start")
+
+        # 進行中に削除を試みる -> 403
+        r_fail = host.delete(f"/api/rooms/{room_id}/cpu")
+        assert r_fail.status_code == 403
+

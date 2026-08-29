@@ -5,29 +5,42 @@ import * as api from '../api'
 import { createDefaultSettings } from '../types'
 import { useGameStore } from './game'
 
-vi.mock('../api', () => ({
-  createRoom: vi.fn(),
-  joinRoom: vi.fn(),
-  updateName: vi.fn(),
-  updateSettings: vi.fn(),
-  startGame: vi.fn(),
-  changeHost: vi.fn(),
-  kickPlayer: vi.fn(),
-  selectTeam: vi.fn(),
-  randomizeTeams: vi.fn(),
-  submitWord: vi.fn(),
-  submitSkip: vi.fn(),
-  submitDisqualify: vi.fn(),
-  submitUndo: vi.fn(),
-  returnToLobby: vi.fn(),
-  fetchRoomInfo: vi.fn(),
-  leaveRoom: vi.fn(),
-  deleteRoom: vi.fn(),
-  notifyDisconnect: vi.fn(),
-  getSseUrl: vi.fn().mockReturnValue('http://localhost/sse'),
-  addCpu: vi.fn(),
-  fetchWordSuggestions: vi.fn(),
-}))
+vi.mock('../api', () => {
+  class ApiError extends Error {
+    status: number
+    constructor(message: string, status: number) {
+      super(message)
+      this.status = status
+      this.name = 'ApiError'
+    }
+  }
+
+  return {
+    ApiError,
+    createRoom: vi.fn(),
+    joinRoom: vi.fn(),
+    updateName: vi.fn(),
+    updateSettings: vi.fn(),
+    startGame: vi.fn(),
+    changeHost: vi.fn(),
+    kickPlayer: vi.fn(),
+    selectTeam: vi.fn(),
+    randomizeTeams: vi.fn(),
+    submitWord: vi.fn(),
+    submitSkip: vi.fn(),
+    submitDisqualify: vi.fn(),
+    submitUndo: vi.fn(),
+    returnToLobby: vi.fn(),
+    fetchRoomInfo: vi.fn(),
+    leaveRoom: vi.fn(),
+    deleteRoom: vi.fn(),
+    notifyDisconnect: vi.fn(),
+    getSseUrl: vi.fn().mockReturnValue('http://localhost/sse'),
+    addCpu: vi.fn(),
+    deleteAllCpus: vi.fn(),
+    fetchWordSuggestions: vi.fn(),
+  }
+})
 
 describe('gameStore CPU・補助モード連携', () => {
   beforeEach(() => {
@@ -108,6 +121,65 @@ describe('gameStore CPU・補助モード連携', () => {
     expect(api.addCpu).toHaveBeenCalledWith('room-1')
     expect(store.players.length).toBe(2)
     expect(store.players[1].isCpu).toBe(true)
+  })
+
+  it('deleteAllCpus: 親がCPUプレイヤーを一括削除できる', async () => {
+    const store = useGameStore()
+    const state = createBaseGameState()
+    state.players.push(
+      {
+        id: 'cpu-1',
+        name: 'CPU 1',
+        teamId: null,
+        status: null,
+        connectionStatus: 'connected',
+        disconnectedAt: null,
+        card: null,
+        bingoLineIds: null,
+        openedCellCount: null,
+        isCpu: true,
+      },
+      {
+        id: 'cpu-2',
+        name: 'CPU 2',
+        teamId: null,
+        status: null,
+        connectionStatus: 'connected',
+        disconnectedAt: null,
+        card: null,
+        bingoLineIds: null,
+        openedCellCount: null,
+        isCpu: true,
+      },
+    )
+    store.roomId = 'room-1'
+    store.myPlayerId = 'player-1'
+    store.applyGameState(state)
+    expect(store.players.length).toBe(3)
+
+    const clearedState: GameState = {
+      ...state,
+      players: [state.players[0]],
+    }
+
+    vi.mocked(api.deleteAllCpus).mockResolvedValueOnce({ gameState: clearedState })
+
+    await store.deleteAllCpus()
+
+    expect(api.deleteAllCpus).toHaveBeenCalledWith('room-1')
+    expect(store.players.length).toBe(1)
+    expect(store.players.some(p => p.isCpu)).toBe(false)
+  })
+
+  it('deleteAllCpus: APIエラー発生時に errorMessage が設定される', async () => {
+    const store = useGameStore()
+    store.roomId = 'room-1'
+    store.myPlayerId = 'player-1'
+
+    vi.mocked(api.deleteAllCpus).mockRejectedValueOnce(new api.ApiError('一括削除に失敗しました', 500))
+
+    await expect(store.deleteAllCpus()).rejects.toThrow()
+    expect(store.errorMessage).toBe('一括削除に失敗しました')
   })
 
   it('isCurrentSubjectCpu & canInput: CPU手番のときは入力不可になる', () => {

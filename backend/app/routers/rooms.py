@@ -376,6 +376,40 @@ async def add_cpu(room_id: str, request: Request):
     return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
 
 
+@router.delete("/api/rooms/{room_id}/cpu")
+async def delete_all_cpus(room_id: str, request: Request):
+    player_id = await _require_player(request)
+    async with db._write_lock:
+        state = await dao.load_room_state(room_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="ルームが存在しません")
+        if state.hostPlayerId != player_id:
+            raise HTTPException(status_code=403, detail="親だけがCPUを削除できます")
+        if state.phase != "setup":
+            raise HTTPException(status_code=403, detail="ロビー中のみ削除できます")
+
+        cpu_players = [p for p in state.players if p.isCpu]
+        if not cpu_players:
+            return JSONResponse(
+                status_code=200, content={"gameState": _public_state(state)}
+            )
+
+        for cpu_p in cpu_players:
+            await dao.delete_player(cpu_p.id)
+
+        state.players = [p for p in state.players if not p.isCpu]
+        for team in state.teams:
+            team.memberPlayerIds = [
+                p.id for p in state.players if p.teamId == team.id
+            ]
+
+        await dao.save_room_state(room_id, state)
+        await broadcast.broadcast(
+            room_id, state, notice="🤖 CPUプレイヤーを一括削除しました。"
+        )
+    return JSONResponse(status_code=200, content={"gameState": _public_state(state)})
+
+
 @router.get("/api/rooms/{room_id}/assist")
 async def get_assist(room_id: str, request: Request):
     state = await dao.load_room_state(room_id)

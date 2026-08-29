@@ -42,6 +42,8 @@ const roomUrl = computed(() => {
 })
 
 const isAddingCpu = ref(false)
+const isDeletingCpus = ref(false)
+const cpuCount = computed(() => store.players.filter(p => p.isCpu).length)
 
 async function onAddCpu(): Promise<void> {
   isAddingCpu.value = true
@@ -50,6 +52,28 @@ async function onAddCpu(): Promise<void> {
   }
   finally {
     isAddingCpu.value = false
+  }
+}
+
+async function onDeleteAllCpus(): Promise<void> {
+  const count = cpuCount.value
+  if (count === 0)
+    return
+  const confirmed = await showConfirm({
+    title: 'CPUの一括削除',
+    message: `すべてのCPUプレイヤー（${count}体）を一括削除しますか？`,
+    confirmText: '一括削除する',
+    danger: true,
+  })
+  if (!confirmed)
+    return
+
+  isDeletingCpus.value = true
+  try {
+    await store.deleteAllCpus()
+  }
+  finally {
+    isDeletingCpus.value = false
   }
 }
 
@@ -354,14 +378,23 @@ async function onDissolveRoom(): Promise<void> {
               </li>
             </ul>
 
-            <div v-if="store.isHost" class="add-cpu-container mt-3">
+            <div v-if="store.isHost" class="cpu-actions-container mt-3">
               <button
                 type="button"
-                class="secondary-button w-100"
-                :disabled="isAddingCpu"
+                class="secondary-button"
+                :disabled="isAddingCpu || isDeletingCpus"
                 @click="onAddCpu"
               >
                 {{ isAddingCpu ? '追加中...' : '🤖 CPUプレイヤーを追加' }}
+              </button>
+              <button
+                v-if="cpuCount > 0"
+                type="button"
+                class="danger-button"
+                :disabled="isAddingCpu || isDeletingCpus"
+                @click="onDeleteAllCpus"
+              >
+                {{ isDeletingCpus ? '削除中...' : '🗑️ CPUを一括削除' }}
               </button>
             </div>
 
@@ -605,6 +638,16 @@ async function onDissolveRoom(): Promise<void> {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.cpu-actions-container {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cpu-actions-container button {
+  flex: 1 1 auto;
 }
 
 .name-input-row {

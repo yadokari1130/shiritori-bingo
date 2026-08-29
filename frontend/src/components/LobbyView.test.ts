@@ -217,4 +217,60 @@ describe('lobbyView', () => {
     modalWrapper.unmount()
     guestWrapper.unmount()
   })
+
+  it('cPUが存在するときCPU一括削除ボタンが表示され、確認ダイアログで確定するとdeleteAllCpusが実行される', async () => {
+    const store = useGameStore()
+    store.roomId = 'room-123'
+    store.myPlayerId = 'p1'
+    const state = createLobbyState()
+    state.players.push({
+      id: 'cpu-1',
+      name: 'CPU 1',
+      teamId: null,
+      status: null,
+      connectionStatus: 'connected',
+      disconnectedAt: null,
+      card: null,
+      bingoLineIds: null,
+      openedCellCount: null,
+      isCpu: true,
+    })
+    store.applyGameState(state)
+    store.deleteAllCpus = vi.fn().mockResolvedValue(undefined)
+
+    const modalWrapper = mount(ConfirmModal, { attachTo: document.body })
+    const hostWrapper = mount(LobbyView, { attachTo: document.body })
+
+    const deleteCpusBtn = hostWrapper.findAll('button').find(b => b.text().includes('CPUを一括削除'))
+    expect(deleteCpusBtn).toBeDefined()
+    await deleteCpusBtn!.trigger('click')
+    await modalWrapper.vm.$nextTick()
+
+    expect(document.body.querySelector('.confirm-modal-backdrop')).not.toBeNull()
+    expect(document.body.querySelector('.confirm-modal-title')?.textContent).toBe('CPUの一括削除')
+    expect(document.body.querySelector('.confirm-modal-message')?.textContent).toContain('すべてのCPUプレイヤー（1体）を一括削除しますか？')
+
+    const confirmBtn = document.body.querySelector('.modal-confirm-button') as HTMLButtonElement
+    confirmBtn.click()
+
+    await hostWrapper.vm.$nextTick()
+    expect(store.deleteAllCpus).toHaveBeenCalled()
+
+    modalWrapper.unmount()
+    hostWrapper.unmount()
+  })
+
+  it('cPUが存在しないときはCPU一括削除ボタンが表示されない', async () => {
+    const store = useGameStore()
+    store.roomId = 'room-123'
+    store.myPlayerId = 'p1'
+    store.applyGameState(createLobbyState()) // CPUなし
+
+    const hostWrapper = mount(LobbyView, { attachTo: document.body })
+
+    const deleteCpusBtn = hostWrapper.findAll('button').find(b => b.text().includes('CPUを一括削除'))
+    expect(deleteCpusBtn).toBeUndefined()
+
+    hostWrapper.unmount()
+  })
 })

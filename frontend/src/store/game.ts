@@ -664,6 +664,22 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  /** すべてのCPUプレイヤーを一括削除する（親のみ） */
+  async function deleteAllCpus(): Promise<void> {
+    const id = roomId.value
+    if (!id)
+      return
+    errorMessage.value = null
+    try {
+      const res = await api.deleteAllCpus(id)
+      applyGameState(res.gameState)
+    }
+    catch (err) {
+      errorMessage.value = err instanceof api.ApiError ? err.message : 'CPUを一括削除できませんでした。'
+      throw err
+    }
+  }
+
   function clearError(): void {
     errorMessage.value = null
   }
@@ -734,5 +750,6 @@ export const useGameStore = defineStore('game', () => {
     setAssistMode,
     fetchWordSuggestions,
     addCpu,
+    deleteAllCpus,
   }
 })
