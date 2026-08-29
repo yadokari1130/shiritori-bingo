@@ -54,6 +54,32 @@ def test_add_cpu_by_host():
         assert "CPU 1" in cpu_names
         assert "CPU 2" in cpu_names
 
+        # CPU 1 をキック（削除）
+        cpu1_id = next(p["id"] for p in players2 if p["name"] == "CPU 1")
+        r_kick = host.post(f"/api/rooms/{room_id}/kick", json={"playerId": cpu1_id})
+        assert r_kick.status_code == 200
+        players_after_kick = r_kick.json()["gameState"]["players"]
+        assert len(players_after_kick) == 3
+        assert [p["name"] for p in players_after_kick if p.get("isCpu")] == ["CPU 2"]
+
+        # CPUを再度追加 -> 残っている最大番号(2)+1の「CPU 3」が割り振られ、CPU 2と被らない（欠番OK）
+        r_readd = host.post(f"/api/rooms/{room_id}/cpu")
+        assert r_readd.status_code == 200
+        players_readded = r_readd.json()["gameState"]["players"]
+        assert len(players_readded) == 4
+        readded_cpu_names = [p["name"] for p in players_readded if p.get("isCpu")]
+        assert "CPU 2" in readded_cpu_names
+        assert "CPU 3" in readded_cpu_names
+        assert len(set(readded_cpu_names)) == 2  # 被りなし
+
+        # もう1体追加 -> 「CPU 4」が割り振られる
+        r_cpu4 = host.post(f"/api/rooms/{room_id}/cpu")
+        assert r_cpu4.status_code == 200
+        players_cpu4 = r_cpu4.json()["gameState"]["players"]
+        assert len(players_cpu4) == 5
+        cpu4_names = [p["name"] for p in players_cpu4 if p.get("isCpu")]
+        assert set(cpu4_names) == {"CPU 2", "CPU 3", "CPU 4"}
+
 
 def test_start_game_with_human_and_cpu():
     """人間1人＋CPU1人でゲームが開始できることを確認。"""

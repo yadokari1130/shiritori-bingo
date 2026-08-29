@@ -346,10 +346,18 @@ async def add_cpu(room_id: str, request: Request):
         if state.phase != "setup":
             raise HTTPException(status_code=403, detail="ロビー中のみ追加できます")
 
-        cpu_count = sum(1 for p in state.players if p.isCpu)
-        name = f"CPU {cpu_count + 1}"
+        max_cpu_num = 0
+        max_sort_order = 0
+        for p in state.players:
+            max_sort_order = max(max_sort_order, p.sortOrder)
+            if p.isCpu and p.name.startswith("CPU "):
+                suffix = p.name[4:]
+                if suffix.isdigit():
+                    max_cpu_num = max(max_cpu_num, int(suffix))
+
+        name = f"CPU {max_cpu_num + 1}"
         cpu_id = dao.generate_uuid()
-        sort_order = await dao.get_next_player_sort_order(room_id)
+        sort_order = max_sort_order + 1
         status = "active" if state.settings.mode == "individual" else None
         new_cpu = Player(
             id=cpu_id,
