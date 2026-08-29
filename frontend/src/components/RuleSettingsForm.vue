@@ -64,6 +64,8 @@ const cardSizeError = computed(() => {
     return '数値を入力してください。'
   if (s < 3)
     return '3以上を指定してください。'
+  if (s > 9)
+    return '9以下を指定してください。'
   if (s % 2 === 0)
     return '奇数を指定してください。'
   if (s > maxSize.value)
@@ -71,10 +73,21 @@ const cardSizeError = computed(() => {
   return ''
 })
 
+const teamCountError = computed(() => {
+  if (draft.value.mode !== 'team')
+    return ''
+  const t = draft.value.teamCount
+  if (Number.isNaN(t) || t === null || t === undefined)
+    return '数値を入力してください。'
+  if (t < 2 || t > 10)
+    return 'チーム数は2〜10の範囲で指定してください。'
+  return ''
+})
+
 const targetBingosError = computed(() => {
   if (draft.value.endCondition !== 'bingos')
     return ''
-  const max = draft.value.cardSize * 2 + 2
+  const max = Math.min(20, draft.value.cardSize * 2 + 2)
   const b = draft.value.targetBingos
   if (Number.isNaN(b) || b < 1 || b > max)
     return `1〜${max}の範囲で指定してください。`
@@ -84,25 +97,23 @@ const targetBingosError = computed(() => {
 const wordLengthError = computed(() => {
   const min = draft.value.minWordLength
   const max = draft.value.maxWordLength
-  if (min !== null && (!Number.isInteger(min) || min < 1))
-    return '最小文字数は1以上の整数で指定してください。'
-  if (max !== null && (!Number.isInteger(max) || max < 1))
-    return '最大文字数は1以上の整数で指定してください。'
+  if (min !== null && (!Number.isInteger(min) || min < 1 || min > 50))
+    return '最小文字数は1〜50の整数で指定してください。'
+  if (max !== null && (!Number.isInteger(max) || max < 1 || max > 50))
+    return '最大文字数は1〜50の整数で指定してください。'
   if (min !== null && max !== null && min > max)
     return '最小文字数は最大文字数以下で指定してください。'
   return ''
 })
 
 const isInvalid = computed(() => {
-  if (cardSizeError.value || targetBingosError.value || wordLengthError.value)
+  if (cardSizeError.value || teamCountError.value || targetBingosError.value || wordLengthError.value)
     return true
-  if (draft.value.endCondition === 'turns' && (Number.isNaN(draft.value.targetTurns) || draft.value.targetTurns < 1))
+  if (draft.value.endCondition === 'turns' && (Number.isNaN(draft.value.targetTurns) || draft.value.targetTurns < 1 || draft.value.targetTurns > 100))
     return true
-  if (draft.value.mode === 'team' && (Number.isNaN(draft.value.teamCount) || draft.value.teamCount < 2))
+  if (Number.isNaN(draft.value.timeLimitSeconds) || draft.value.timeLimitSeconds < 5 || draft.value.timeLimitSeconds > 300)
     return true
-  if (Number.isNaN(draft.value.timeLimitSeconds) || draft.value.timeLimitSeconds < 1)
-    return true
-  if (Number.isNaN(draft.value.extraTimeSeconds) || draft.value.extraTimeSeconds < 0)
+  if (Number.isNaN(draft.value.extraTimeSeconds) || draft.value.extraTimeSeconds < 0 || draft.value.extraTimeSeconds > 120)
     return true
   return false
 })
@@ -206,9 +217,13 @@ function onSelectPresetToEdit(presetId: string): void {
               v-model.number="draft.teamCount"
               type="number"
               min="2"
+              max="10"
               class="number-input"
               @input="updateDraft"
             >
+            <p v-if="teamCountError" class="notice error mt-1">
+              {{ teamCountError }}
+            </p>
           </div>
         </div>
       </fieldset>
@@ -226,6 +241,7 @@ function onSelectPresetToEdit(presetId: string): void {
               v-model.number="draft.cardSize"
               type="number"
               min="3"
+              max="9"
               step="2"
               class="number-input"
               @input="updateDraft"
@@ -343,6 +359,7 @@ function onSelectPresetToEdit(presetId: string): void {
               v-model.number="draft.targetTurns"
               type="number"
               min="1"
+              max="100"
               class="number-input"
               :disabled="draft.endCondition !== 'turns'"
               aria-label="ターン数の目標値"
@@ -369,6 +386,7 @@ function onSelectPresetToEdit(presetId: string): void {
               v-model.number="draft.targetBingos"
               type="number"
               min="1"
+              :max="Math.min(20, draft.cardSize * 2 + 2)"
               class="number-input"
               :disabled="draft.endCondition !== 'bingos'"
               aria-label="ビンゴ数の目標値"
@@ -393,7 +411,8 @@ function onSelectPresetToEdit(presetId: string): void {
               id="timeLimitSeconds"
               v-model.number="draft.timeLimitSeconds"
               type="number"
-              min="1"
+              min="5"
+              max="300"
               class="number-input"
               @input="updateDraft"
             >
@@ -405,6 +424,7 @@ function onSelectPresetToEdit(presetId: string): void {
               v-model.number="draft.extraTimeSeconds"
               type="number"
               min="0"
+              max="120"
               class="number-input"
               @input="updateDraft"
             >
@@ -490,6 +510,7 @@ function onSelectPresetToEdit(presetId: string): void {
                   v-model.number="draft.minWordLength"
                   type="number"
                   min="1"
+                  max="50"
                   class="number-input"
                   placeholder="制限なし"
                   @input="updateDraft"
@@ -512,6 +533,7 @@ function onSelectPresetToEdit(presetId: string): void {
                   v-model.number="draft.maxWordLength"
                   type="number"
                   min="1"
+                  max="50"
                   class="number-input"
                   placeholder="制限なし"
                   @input="updateDraft"

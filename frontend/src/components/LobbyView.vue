@@ -41,11 +41,19 @@ const roomUrl = computed(() => {
   return `${window.location.origin}/game/${store.roomId}`
 })
 
+const MAX_PLAYERS_PER_ROOM = 20
+const MAX_CPUS_PER_ROOM = 10
+
 const isAddingCpu = ref(false)
 const isDeletingCpus = ref(false)
 const cpuCount = computed(() => store.players.filter(p => p.isCpu).length)
+const canAddCpu = computed(() => cpuCount.value < MAX_CPUS_PER_ROOM && store.players.length < MAX_PLAYERS_PER_ROOM)
+const isCpuLimitReached = computed(() => cpuCount.value >= MAX_CPUS_PER_ROOM)
+const isRoomFull = computed(() => store.players.length >= MAX_PLAYERS_PER_ROOM)
 
 async function onAddCpu(): Promise<void> {
+  if (!canAddCpu.value)
+    return
   isAddingCpu.value = true
   try {
     await store.addCpu()
@@ -382,7 +390,7 @@ async function onDissolveRoom(): Promise<void> {
               <button
                 type="button"
                 class="secondary-button"
-                :disabled="isAddingCpu || isDeletingCpus"
+                :disabled="isAddingCpu || isDeletingCpus || !canAddCpu"
                 @click="onAddCpu"
               >
                 {{ isAddingCpu ? '追加中...' : '🤖 CPUプレイヤーを追加' }}
@@ -396,6 +404,12 @@ async function onDissolveRoom(): Promise<void> {
               >
                 {{ isDeletingCpus ? '削除中...' : '🗑️ CPUを一括削除' }}
               </button>
+              <p v-if="isRoomFull" class="notice warning mt-1">
+                部屋の定員（{{ MAX_PLAYERS_PER_ROOM }}名）に達しているため、これ以上追加できません。
+              </p>
+              <p v-else-if="isCpuLimitReached" class="notice warning mt-1">
+                CPUプレイヤーは最大{{ MAX_CPUS_PER_ROOM }}体まで追加できます。
+              </p>
             </div>
 
             <div class="name-edit-box mt-4">
