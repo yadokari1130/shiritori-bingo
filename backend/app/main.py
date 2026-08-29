@@ -1,20 +1,35 @@
 import asyncio
 import logging
 import os
-import time
 import uuid
-from collections import defaultdict
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from secure import (
+    ReferrerPolicy,
+    Secure,
+    StrictTransportSecurity,
+    XContentTypeOptions,
+    XFrameOptions,
+)
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from tortoise import Tortoise
 
 from app import cleanup, db
+from app.limiter import limiter
 from app.routers import rooms
 
 logger = logging.getLogger("shiritori_bingo")
+
+secure_headers = Secure(
+    hsts=StrictTransportSecurity().include_subdomains().preload().max_age(31536000),
+    xcto=XContentTypeOptions().nosniff(),
+    xfo=XFrameOptions().deny(),
+    referrer=ReferrerPolicy().strict_origin_when_cross_origin(),
+)
 
 
 def _load_allowed_origins() -> list[str]:
@@ -50,32 +65,16 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="しりとりビンゴ API", lifespan=lifespan)
-
-# 簡易インメモリレートリミッター（IPごとのリクエスト履歴を保持）
-_RATE_LIMIT_BUCKET: dict[str, list[float]] = defaultdict(list)
-_MAX_REQUESTS_PER_MINUTE = 300  # 1分間に最大300リクエスト
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 
 @app.middleware("http")
-async def security_and_rate_limit_middleware(request: Request, call_next):
+async def security_middleware(request: Request, call_next):
     # 1. Request ID の生成とコンテキスト付与
     request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16]
 
-    # 2. レートリミット（簡易スライディングウィンドウ）
-    client_ip = request.client.host if request.client else "unknown"
-    now = time.time()
-    timestamps = _RATE_LIMIT_BUCKET[client_ip]
-    # 60秒以内のタイムスタンプのみ保持
-    _RATE_LIMIT_BUCKET[client_ip] = [ts for ts in timestamps if now - ts < 60.0]
-    if len(_RATE_LIMIT_BUCKET[client_ip]) >= _MAX_REQUESTS_PER_MINUTE:
-        return JSONResponse(
-            status_code=429,
-            content={"detail": "リクエスト数が上限を超えました。しばらく待ってから再試行してください。"},
-            headers={"X-Request-ID": request_id},
-        )
-    _RATE_LIMIT_BUCKET[client_ip].append(now)
-
-    # 3. Origin チェック（状態変更リクエストのみ）
+    # 2. Origin チェック（状態変更リクエストのみ）
     if request.method in ("POST", "PUT", "DELETE", "PATCH"):
         origin = request.headers.get("origin")
         if origin:
@@ -90,6 +89,7 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
 
     response: Response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
+    secure_headers.set_headers(response)
     return response
 
 
