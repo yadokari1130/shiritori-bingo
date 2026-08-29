@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app import broadcast, cleanup, cpu, dao, db, engine, security
+from app.limiter import limiter
 from app.models import (
     ActionRequest,
     ChangeHostRequest,
@@ -26,6 +27,9 @@ from app.models import (
     UndoAction,
     WordAction,
 )
+
+MAX_PLAYERS_PER_ROOM = 20
+MAX_CPUS_PER_ROOM = 10
 
 router = APIRouter()
 
@@ -145,6 +149,7 @@ async def _run_cpu_turn(room_id: str, expected_round: int, expected_order_index:
 
 
 @router.post("/api/rooms")
+@limiter.limit("10/minute")
 async def create_room(request: Request, body: CreateRoomRequest):
     room_id = secrets.token_urlsafe(12)
     password_hash = (
@@ -180,6 +185,7 @@ async def get_room_info(room_id: str):
 
 
 @router.post("/api/rooms/{room_id}/join")
+@limiter.limit("30/minute")
 async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
     row = await dao.get_room(room_id)
     if row is None:
@@ -287,6 +293,13 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
     if state.phase == "result":
         raise HTTPException(status_code=403, detail="ゲームが終了しているため参加できません")
 
+    # 新規参加時の人数制限チェック
+    if len(state.players) >= MAX_PLAYERS_PER_ROOM:
+        raise HTTPException(
+            status_code=400,
+            detail=f"ルームの定員（最大{MAX_PLAYERS_PER_ROOM}名）に達しています",
+        )
+
     # 新規参加
     player_id = dao.generate_uuid()
     sort_order = await dao.get_next_player_sort_order(room_id)
@@ -335,6 +348,7 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
 
 
 @router.post("/api/rooms/{room_id}/cpu")
+@limiter.limit("30/minute")
 async def add_cpu(room_id: str, request: Request):
     player_id = await _require_player(request)
     async with db._write_lock:
@@ -345,6 +359,19 @@ async def add_cpu(room_id: str, request: Request):
             raise HTTPException(status_code=403, detail="親だけがCPUを追加できます")
         if state.phase != "setup":
             raise HTTPException(status_code=403, detail="ロビー中のみ追加できます")
+
+        # 定員およびCPU数の上限チェック
+        if len(state.players) >= MAX_PLAYERS_PER_ROOM:
+            raise HTTPException(
+                status_code=400,
+                detail=f"ルームの定員（最大{MAX_PLAYERS_PER_ROOM}名）に達しています",
+            )
+        current_cpu_count = sum(1 for p in state.players if p.isCpu)
+        if current_cpu_count >= MAX_CPUS_PER_ROOM:
+            raise HTTPException(
+                status_code=400,
+                detail=f"CPUの上限（最大{MAX_CPUS_PER_ROOM}体）に達しています",
+            )
 
         max_cpu_num = 0
         max_sort_order = 0
@@ -864,6 +891,7 @@ async def randomize_teams(room_id: str, request: Request):
 
 
 @router.post("/api/rooms/{room_id}/action")
+@limiter.limit("60/minute")
 async def action(room_id: str, request: Request, body: ActionRequest):
     player_id = await _require_player(request)
     async with db._write_lock:

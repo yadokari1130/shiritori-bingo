@@ -17,8 +17,8 @@ def _ensure_room(room_id: str) -> set[asyncio.Queue[dict]]:
 
 
 def subscribe(room_id: str) -> asyncio.Queue[dict]:
-    """SSE用のQueueを登録する。"""
-    queue: asyncio.Queue[dict] = asyncio.Queue()
+    """SSE用のQueueを登録する。1接続あたり最大50件のメッセージをバッファ。"""
+    queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=50)
     _ensure_room(room_id).add(queue)
     return queue
 

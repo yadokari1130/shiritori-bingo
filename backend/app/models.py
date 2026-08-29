@@ -1,8 +1,23 @@
-from __future__ import annotations
-
+import unicodedata
 from typing import Annotated, Literal
 
+import nh3
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+def sanitize_text(text: str, max_length: int = 50) -> str:
+    """nh3 と unicodedata を使用してプレーンテキストを無害化・正規化する。"""
+    if not text:
+        return ""
+    # 1. HTMLタグ・スクリプトの完全除去
+    cleaned = nh3.clean(text, tags=set())
+    # 2. Unicode NFKC 正規化
+    normalized = unicodedata.normalize("NFKC", cleaned)
+    # 3. 制御文字（ASCII制御文字およびDEL）の除去
+    sanitized = "".join(ch for ch in normalized if ord(ch) >= 32 and ord(ch) != 127)
+    # 4. 前後の空白（全角空白・ゼロ幅スペース含む）をトリム
+    trimmed = sanitized.strip(" \t\n\r\u3000\u200b\u200c\u200d\ufeff")
+    return trimmed[:max_length]
 
 
 class CardOptions(BaseModel):
@@ -19,33 +34,40 @@ class CardOptions(BaseModel):
 class Settings(BaseModel):
     """ゲームルール設定。"""
 
-    cardSize: int = 5
+    cardSize: int = Field(default=5, ge=3, le=9)
     mode: Literal["individual", "team"] = "individual"
-    teamCount: int = 2
+    teamCount: int = Field(default=2, ge=2, le=10)
     cardOptions: CardOptions = Field(default_factory=CardOptions)
     endCondition: Literal["turns", "bingos"] = "turns"
-    targetTurns: int = 3
-    targetBingos: int = 3
-    timeLimitSeconds: int = 30
-    extraTimeSeconds: int = 10
+    targetTurns: int = Field(default=3, ge=1, le=100)
+    targetBingos: int = Field(default=3, ge=1, le=20)
+    timeLimitSeconds: int = Field(default=30, ge=5, le=300)
+    extraTimeSeconds: int = Field(default=10, ge=0, le=120)
     forceSkipOnTimeout: bool = False
     invalidAction: Literal["skip", "disqualify"] = "skip"
     inputWordCheck: bool = True
-    minWordLength: int | None = None
-    maxWordLength: int | None = None
+    minWordLength: int | None = Field(default=None, ge=1, le=50)
+    maxWordLength: int | None = Field(default=None, ge=1, le=50)
 
     @field_validator("cardSize")
     @classmethod
     def _validate_card_size(cls, value: int) -> int:
-        if value < 3 or value % 2 == 0:
-            raise ValueError("カードサイズは3以上の奇数である必要があります")
+        if value < 3 or value > 9 or value % 2 == 0:
+            raise ValueError("カードサイズは3以上9以下の奇数である必要があります")
+        return value
+
+    @field_validator("teamCount")
+    @classmethod
+    def _validate_team_count(cls, value: int) -> int:
+        if value < 2 or value > 10:
+            raise ValueError("チーム数は2以上10以下で指定してください")
         return value
 
     @field_validator("minWordLength", "maxWordLength")
     @classmethod
     def _validate_word_length(cls, value: int | None) -> int | None:
-        if value is not None and value < 1:
-            raise ValueError("単語の文字数制限は1以上で指定してください")
+        if value is not None and (value < 1 or value > 50):
+            raise ValueError("単語の文字数制限は1以上50以下で指定してください")
         return value
 
     @model_validator(mode="after")
@@ -56,6 +78,13 @@ class Settings(BaseModel):
             and self.minWordLength > self.maxWordLength
         ):
             raise ValueError("最小文字数は最大文字数以下で指定してください")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_target_bingos(self) -> Settings:
+        if self.endCondition == "bingos" and self.targetBingos > self.cardSize * 2 + 2:
+            max_bingos = self.cardSize * 2 + 2
+            raise ValueError(f"ビンゴ数はカードサイズに対して最大{max_bingos}までです")
         return self
 
 
@@ -236,11 +265,27 @@ class JoinRoomRequest(BaseModel):
     password: str | None = Field(default=None, max_length=100)
     name: str | None = Field(default=None, max_length=50)
 
+    @field_validator("name")
+    @classmethod
+    def _sanitize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        sanitized = sanitize_text(value, max_length=50)
+        return sanitized or None
+
 
 class NameChangeRequest(BaseModel):
     """名前変更リクエスト。"""
 
     name: str = Field(..., min_length=1, max_length=50)
+
+    @field_validator("name")
+    @classmethod
+    def _sanitize_name(cls, value: str) -> str:
+        sanitized = sanitize_text(value, max_length=50)
+        if not sanitized:
+            raise ValueError("有効な名前を入力してください")
+        return sanitized
 
 
 class ChangeTeamRequest(BaseModel):
@@ -265,7 +310,15 @@ class WordAction(BaseModel):
     """単語確定アクション。"""
 
     type: Literal["word"]
-    word: str = Field(..., min_length=1, max_length=100)
+    word: str = Field(..., min_length=1, max_length=50)
+
+    @field_validator("word")
+    @classmethod
+    def _sanitize_word(cls, value: str) -> str:
+        sanitized = sanitize_text(value, max_length=50)
+        if not sanitized:
+            raise ValueError("単語を入力してください")
+        return sanitized
 
 
 class SkipAction(BaseModel):
