@@ -145,10 +145,26 @@ export const useGameStore = defineStore('game', () => {
 
   // サーバー時刻とのオフセット (ms): サーバー時刻 = Date.now() + serverTimeOffset
   const serverTimeOffset = ref(0)
+  let isOffsetInitialized = false
 
   function updateServerTimeOffset(serverTimestamp?: number): void {
     if (typeof serverTimestamp === 'number' && !Number.isNaN(serverTimestamp)) {
-      serverTimeOffset.value = serverTimestamp - Date.now()
+      const sample = serverTimestamp - Date.now()
+      if (!isOffsetInitialized) {
+        serverTimeOffset.value = sample
+        isOffsetInitialized = true
+      }
+      else {
+        const diff = sample - serverTimeOffset.value
+        // スリープ復帰やOS時刻変更など極端なズレ（2秒以上）の場合は即座に追従
+        if (Math.abs(diff) > 2000) {
+          serverTimeOffset.value = sample
+        }
+        else {
+          // パケット遅延やジッターによる急激な「時間の飛び」を防ぐため、指数移動平均で平滑化
+          serverTimeOffset.value = Math.round(serverTimeOffset.value + diff * 0.1)
+        }
+      }
     }
   }
 
@@ -265,6 +281,8 @@ export const useGameStore = defineStore('game', () => {
     sseClient?.stop()
     sseClient = null
     connectionStatus.value = 'disconnected'
+    isOffsetInitialized = false
+    serverTimeOffset.value = 0
   }
 
   /** ルームを作成する */

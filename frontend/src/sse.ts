@@ -55,6 +55,11 @@ export class SseClient {
     if (this.stopped)
       return
 
+    if (this.eventSource) {
+      this.eventSource.close()
+      this.eventSource = null
+    }
+
     try {
       // withCredentials で Cookie を送信する。仕様 14.2, 14.5
       const eventSource = new EventSource(this.url, { withCredentials: true })
