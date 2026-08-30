@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useGameStore } from '../store/game'
-import { validateWordForFrontend } from '../utils/shiritori'
+import { normalizeTail, validateWordForFrontend } from '../utils/shiritori'
 import BingoCard from './BingoCard.vue'
 import DisconnectedMark from './DisconnectedMark.vue'
 import RuleExplanationModal from './RuleExplanationModal.vue'
@@ -16,6 +16,11 @@ const showRuleModal = ref(false)
 
 const isFirstWord = computed(() => (store.gameState?.wordHistory.length ?? 0) === 0)
 const requiredStartChar = computed(() => store.gameState?.requiredStartChar ?? '')
+const availableStartChars = computed(() => {
+  if (!requiredStartChar.value)
+    return []
+  return normalizeTail(requiredStartChar.value)
+})
 
 const now = ref(Date.now())
 let timerInterval: ReturnType<typeof setInterval> | null = null
@@ -63,12 +68,60 @@ const remainingSeconds = computed(() => {
   return Math.max(0, Math.ceil(remainingMs.value / 1000))
 })
 
-const timerWarning = computed(() => {
+const isLowTime = computed(() => {
+  return remainingSeconds.value > 0 && remainingSeconds.value <= 10
+})
+
+const isCriticalTime = computed(() => {
+  return remainingSeconds.value > 0 && remainingSeconds.value <= 3
+})
+
+const isOvertime = computed(() => {
   return remainingSeconds.value === 0 && !store.gameState?.settings.forceSkipOnTimeout
+})
+
+const timerWarning = computed(() => {
+  return isLowTime.value || isOvertime.value
 })
 
 const timerExpired = computed(() => {
   return remainingSeconds.value === 0 && Boolean(store.gameState?.settings.forceSkipOnTimeout)
+})
+
+const timeProgressPercent = computed(() => {
+  const total = store.gameState?.currentTurnTimeLimitMs ?? 0
+  if (total <= 0)
+    return 0
+  return Math.max(0, Math.min(100, (remainingMs.value / total) * 100))
+})
+
+const turnMainDisplay = computed(() => {
+  const state = store.gameState
+  if (!state)
+    return ''
+  if (state.settings.endCondition === 'turns') {
+    return `${state.round} / ${state.settings.targetTurns} ターン`
+  }
+  return `${state.round} ターン目`
+})
+
+const turnSubDisplay = computed(() => {
+  const state = store.gameState
+  if (!state)
+    return ''
+  const total = state.roundRoster.length
+  const current = Math.min(state.orderIndex + 1, total)
+  const unit = state.settings.mode === 'team' ? 'チーム' : '人'
+  const turnOrderText = `手番: ${current}/${total}${unit}`
+
+  if (state.settings.endCondition === 'bingos') {
+    return `${turnOrderText}（${state.settings.targetBingos}ビンゴで終了）`
+  }
+  return turnOrderText
+})
+
+const wordHistoryForDisplay = computed(() => {
+  return (store.gameState?.wordHistory ?? []).slice().reverse()
 })
 
 watch(timerExpired, (expired) => {
@@ -122,19 +175,6 @@ const orderedCards = computed(() => {
       card: t.card!,
       disqualified: t.status === 'disqualified',
     }))
-})
-
-const turnProgress = computed(() => {
-  const state = store.gameState
-  if (!state)
-    return ''
-  const total = state.roundRoster.length
-  const current = Math.min(state.orderIndex + 1, total)
-  return `${state.round}ターン目 ${current}/${total}手番`
-})
-
-const wordHistoryForDisplay = computed(() => {
-  return (store.gameState?.wordHistory ?? []).slice().reverse()
 })
 
 watch(
@@ -279,13 +319,25 @@ function historyKey(entry: { word: string, playerId: string, round: number, sequ
       <div class="summary-card-item">
         <div class="summary-card">
           <span class="summary-label">現在の開始文字</span>
-          <span class="start-letter">{{ requiredStartChar || '—' }}</span>
+          <div class="start-letters-list">
+            <span
+              v-for="char in availableStartChars"
+              :key="char"
+              class="start-letter"
+            >
+              {{ char }}
+            </span>
+            <span v-if="availableStartChars.length === 0" class="start-letter">—</span>
+          </div>
         </div>
       </div>
       <div class="summary-card-item">
         <div class="summary-card">
           <span class="summary-label">ターン / 終了条件</span>
-          <strong class="summary-value">{{ turnProgress }}</strong>
+          <strong class="summary-value">{{ turnMainDisplay }}</strong>
+          <p class="summary-subtext">
+            {{ turnSubDisplay }}
+          </p>
         </div>
       </div>
       <div class="summary-card-item">
@@ -294,11 +346,20 @@ function historyKey(entry: { word: string, playerId: string, round: number, sequ
           :class="{
             'is-expired': timerExpired || (remainingSeconds === 0 && store.gameState?.settings.forceSkipOnTimeout),
             'is-warning': timerWarning,
+            'is-critical': isCriticalTime,
+            'is-overtime': isOvertime,
           }"
         >
+          <div class="timer-progress-track" aria-hidden="true">
+            <div
+              class="timer-progress-bar"
+              :style="{ width: `${timeProgressPercent}%` }"
+            />
+          </div>
           <span class="summary-label">残り制限時間</span>
-          <strong class="summary-value time-value">{{ formatTime(remainingSeconds) }}</strong>
-          <span v-if="timerExpired" class="timer-status">時間切れ</span>
+          <div class="timer-value-container">
+            <strong :key="remainingSeconds" class="summary-value time-value">{{ formatTime(remainingSeconds) }}</strong>
+          </div>
           <p class="time-note">
             {{ store.gameState?.settings.forceSkipOnTimeout ? '時間切れで強制スキップ' : '時間切れ後も入力できます' }}
           </p>
@@ -318,6 +379,10 @@ function historyKey(entry: { word: string, playerId: string, round: number, sequ
               v-model="inputWord"
               type="text"
               class="word-input"
+              :class="{
+                'is-timer-warning': store.canInput && isLowTime && !isCriticalTime,
+                'is-timer-critical': store.canInput && (isCriticalTime || isOvertime),
+              }"
               placeholder="ひらがなで単語を入力"
               autocomplete="off"
               spellcheck="false"

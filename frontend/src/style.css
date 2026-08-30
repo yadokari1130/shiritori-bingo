@@ -674,26 +674,46 @@ button:disabled {
   font-weight: 900;
 }
 
+.summary-subtext {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.start-letters-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
 .start-letter {
   display: inline-grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  margin-top: 3px;
-  border-radius: 13px;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
   background: var(--gold-pale);
   color: #74510d;
-  font-size: 1.8rem;
+  font-size: 1.6rem;
   font-weight: 900;
   line-height: 1;
 }
 
 .timer-card {
-  background: var(--navy);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #1b3a4b, #152c39);
   color: #fff;
+  border: 1px solid var(--line);
+  border-radius: 17px;
   transition:
-    background 180ms ease,
-    box-shadow 180ms ease;
+    background 300ms ease,
+    border-color 300ms ease,
+    box-shadow 300ms ease;
 }
 
 .timer-card .summary-label,
@@ -701,17 +721,86 @@ button:disabled {
   color: #fff;
 }
 
+/* タイムプログレスバー */
+.timer-progress-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.timer-progress-bar {
+  height: 100%;
+  border-radius: 0 2px 2px 0;
+  background: linear-gradient(90deg, #22c55e, #10b981);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+  transition:
+    width 0.1s linear,
+    background 0.3s ease;
+}
+
+.timer-value-container {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
 .time-value {
+  display: inline-block;
   font-variant-numeric: tabular-nums;
 }
 
-.timer-card.is-expired {
-  border-color: #7d211f;
-  background: var(--danger);
-  box-shadow: 0 0 0 5px rgba(167, 48, 44, 0.25);
-  animation: timer-expired-pulse 1.2s ease-in-out infinite;
+/* 残り時間わずか（警告: 10秒以下） */
+.timer-card.is-warning {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #9a3412, #c2410c);
+  animation: timer-warning-glow 1.5s ease-in-out infinite;
 }
 
+.timer-card.is-warning .timer-progress-bar {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+}
+
+/* 残り時間極小（緊急: 3秒以下） */
+.timer-card.is-critical {
+  border-color: #ef4444;
+  background: linear-gradient(135deg, #7f1d1d, #991b1b);
+  animation: timer-critical-glow 1s ease-in-out infinite;
+}
+
+.timer-card.is-critical .timer-progress-bar {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+}
+
+/* 時間超過（0秒到達・強制スキップ無効時） */
+.timer-card.is-overtime {
+  border-color: #ea580c;
+  background: linear-gradient(135deg, #7c2d12, #9a3412);
+  animation: timer-warning-glow 1.8s ease-in-out infinite;
+}
+
+/* 時間切れ（0秒到達・強制スキップ有効時） */
+.timer-card.is-expired {
+  border-color: #fca5a5;
+  background: var(--danger);
+  box-shadow: 0 0 0 4px rgba(167, 48, 44, 0.25);
+  animation: timer-expired-pulse 1.4s ease-in-out infinite;
+}
+
+.timer-card.is-warning .summary-label,
+.timer-card.is-warning .summary-value,
+.timer-card.is-warning .time-note,
+.timer-card.is-critical .summary-label,
+.timer-card.is-critical .summary-value,
+.timer-card.is-critical .time-note,
+.timer-card.is-overtime .summary-label,
+.timer-card.is-overtime .summary-value,
+.timer-card.is-overtime .time-note,
 .timer-card.is-expired .summary-label,
 .timer-card.is-expired .summary-value,
 .timer-card.is-expired .time-note {
@@ -719,40 +808,112 @@ button:disabled {
 }
 
 .timer-status {
-  display: block;
-  margin-top: 2px;
-  color: #ffd6ce;
-  font-size: 0.82rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  margin-top: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
 }
 
 .timer-status:empty {
   display: none;
 }
 
-.timer-card.is-expired .timer-status {
-  width: max-content;
-  padding: 2px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 999px;
+.timer-status.badge-warning {
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: #fff;
+  color: #b45309;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.timer-status.badge-critical {
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: #fff;
+  color: #dc2626;
+  box-shadow: 0 1px 6px rgba(220, 38, 38, 0.25);
+}
+
+.timer-status.badge-overtime {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.timer-status.badge-expired {
+  border: 1px solid rgba(255, 255, 255, 0.8);
   background: #fff;
   color: var(--danger);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
 .time-note {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
   color: #c9dce3;
   font-size: 0.78rem;
+}
+
+/* タイマーアニメーションキーフレーム（過度な拡大を抑えた上品なグロー） */
+@keyframes timer-warning-glow {
+  0%,
+  100% {
+    box-shadow: 0 4px 12px rgba(194, 65, 12, 0.15);
+    border-color: rgba(245, 158, 11, 0.6);
+  }
+  50% {
+    box-shadow: 0 4px 18px rgba(194, 65, 12, 0.35);
+    border-color: #f59e0b;
+  }
+}
+
+@keyframes timer-critical-glow {
+  0%,
+  100% {
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25);
+    border-color: rgba(239, 68, 68, 0.6);
+  }
+  50% {
+    box-shadow: 0 4px 22px rgba(220, 38, 38, 0.5);
+    border-color: #ef4444;
+  }
 }
 
 @keyframes timer-expired-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 4px rgba(167, 48, 44, 0.2);
+    box-shadow: 0 0 0 3px rgba(167, 48, 44, 0.2);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(167, 48, 44, 0.35);
+    box-shadow: 0 0 0 6px rgba(167, 48, 44, 0.35);
+  }
+}
+
+/* 入力欄連動警告スタイル（落ち着いたアクセントカラー） */
+.word-input.is-timer-warning {
+  border-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.3);
+}
+
+.word-input.is-timer-critical {
+  border-color: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* アニメーション低減モードへの配慮 */
+@media (prefers-reduced-motion: reduce) {
+  .timer-card.is-warning,
+  .timer-card.is-critical,
+  .timer-card.is-overtime,
+  .timer-card.is-expired,
+  .timer-status.badge-critical,
+  .word-input.is-timer-warning,
+  .word-input.is-timer-critical {
+    animation: none;
+    transform: none;
   }
 }
 

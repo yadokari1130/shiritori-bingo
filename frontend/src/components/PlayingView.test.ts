@@ -63,19 +63,40 @@ describe('playingView タイマー・時間同期', () => {
 
     // 初期状態: 40秒
     expect(wrapper.find('.time-value').text()).toBe('40秒')
+    expect(wrapper.find('.timer-card').classes()).not.toContain('is-warning')
+    expect(wrapper.find('.timer-card').classes()).not.toContain('is-critical')
+    expect(wrapper.find('.timer-progress-bar').attributes('style')).toContain('width: 100%')
 
-    // 5秒経過
+    // 5秒経過 (残り35秒)
     vi.advanceTimersByTime(5000)
     await wrapper.vm.$nextTick()
     expect(wrapper.find('.time-value').text()).toBe('35秒')
+    expect(wrapper.find('.timer-card').classes()).not.toContain('is-warning')
+
+    // 30秒経過 (残り10秒): 残りわずか警告
+    vi.advanceTimersByTime(25000)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.time-value').text()).toBe('10秒')
+    expect(wrapper.find('.timer-card').classes()).toContain('is-warning')
+    expect(wrapper.find('.timer-card').classes()).not.toContain('is-critical')
+    expect(wrapper.find('.word-input').classes()).toContain('is-timer-warning')
+
+    // 37秒経過 (残り3秒): 緊急警告
+    vi.advanceTimersByTime(7000)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.time-value').text()).toBe('3秒')
+    expect(wrapper.find('.timer-card').classes()).toContain('is-warning')
+    expect(wrapper.find('.timer-card').classes()).toContain('is-critical')
+    expect(wrapper.find('.word-input').classes()).toContain('is-timer-critical')
 
     // 40秒経過: 0秒
-    vi.advanceTimersByTime(35000)
+    vi.advanceTimersByTime(3000)
     await wrapper.vm.$nextTick()
     expect(wrapper.find('.time-value').text()).toBe('0秒')
 
     // forceSkipOnTimeout=false の場合、0秒到達時は警告スタイルが表示され、入力欄は無効化されない
     expect(wrapper.find('.timer-card').classes()).toContain('is-warning')
+    expect(wrapper.find('.timer-card').classes()).toContain('is-overtime')
     expect(wrapper.find('.word-input').attributes('disabled')).toBeUndefined()
   })
 
@@ -189,7 +210,6 @@ describe('playingView タイマー・時間同期', () => {
 
     expect(wrapper.find('.time-value').text()).toBe('0秒')
     expect(wrapper.find('.timer-card').classes()).toContain('is-expired')
-    expect(wrapper.find('.timer-status').text()).toBe('時間切れ')
     expect(wrapper.find('.word-input').attributes('disabled')).toBeDefined()
   })
 
@@ -695,5 +715,160 @@ describe('playingView タイマー・時間同期', () => {
     expect(orderItems).toHaveLength(2)
     expect(orderItems[0].text()).toContain('チーム 2')
     expect(orderItems[1].text()).toContain('チーム 1')
+  })
+
+  it('ターン / 終了条件カードで指定ターン数・手番進行（個人戦・チーム戦）がわかりやすく表示される', async () => {
+    const store = useGameStore()
+    store.roomId = 'room-1'
+    store.myPlayerId = 'p1'
+    store.applyGameState({
+      phase: 'playing',
+      settings: {
+        ...createDefaultSettings(),
+        mode: 'individual',
+        endCondition: 'turns',
+        targetTurns: 5,
+      },
+      hostPlayerId: 'p1',
+      hasPassword: false,
+      freeChar: 'あ',
+      players: [
+        { id: 'p1', name: 'プレイヤー1', teamId: null, isCpu: false, connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: [], openedCellCount: 0, status: 'active' },
+        { id: 'p2', name: 'プレイヤー2', teamId: null, isCpu: false, connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: [], openedCellCount: 0, status: 'active' },
+      ],
+      teams: [],
+      playOrder: ['p1', 'p2'],
+      round: 1,
+      roundRoster: ['p1', 'p2'],
+      orderIndex: 0,
+      currentPlayerId: 'p1',
+      currentTeamId: null,
+      requiredStartChar: 'あ',
+      usedWords: [],
+      wordHistory: [],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: Date.now(),
+      result: null,
+      undoHistory: [],
+    })
+
+    const wrapper = mount(PlayingView)
+    const summaryCards = wrapper.findAll('.summary-card')
+    const turnCard = summaryCards[2]
+
+    // メイン表示が「1 / 5 ターン」、サブ表示が「手番: 1/2人」であること
+    expect(turnCard.find('.summary-value').text()).toBe('1 / 5 ターン')
+    expect(turnCard.find('.summary-subtext').text()).toBe('手番: 1/2人')
+  })
+
+  it('ターン / 終了条件カードで指定ビンゴ数設定時に終了条件がサブ表示される', async () => {
+    const store = useGameStore()
+    store.roomId = 'room-1'
+    store.myPlayerId = 'p1'
+    store.applyGameState({
+      phase: 'playing',
+      settings: {
+        ...createDefaultSettings(),
+        mode: 'team',
+        endCondition: 'bingos',
+        targetBingos: 3,
+      },
+      hostPlayerId: 'p1',
+      hasPassword: false,
+      freeChar: 'あ',
+      players: [
+        { id: 'p1', name: 'プレイヤー1', teamId: 't1', isCpu: false, connectionStatus: 'connected', disconnectedAt: null, card: null, bingoLineIds: [], openedCellCount: 0, status: 'active' },
+      ],
+      teams: [
+        { id: 't1', memberPlayerIds: ['p1'], status: 'active', card: { size: 3, cells: [], freeChar: 'あ' }, bingoLineIds: [], openedCellCount: 1 },
+        { id: 't2', memberPlayerIds: [], status: 'active', card: { size: 3, cells: [], freeChar: 'あ' }, bingoLineIds: [], openedCellCount: 1 },
+      ],
+      playOrder: ['t1', 't2'],
+      round: 2,
+      roundRoster: ['t1', 't2'],
+      orderIndex: 1,
+      currentPlayerId: null,
+      currentTeamId: 't2',
+      requiredStartChar: 'い',
+      usedWords: [],
+      wordHistory: [],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: Date.now(),
+      result: null,
+      undoHistory: [],
+    })
+
+    const wrapper = mount(PlayingView)
+    const summaryCards = wrapper.findAll('.summary-card')
+    const turnCard = summaryCards[2]
+
+    // メイン表示が「2 ターン目」、サブ表示が「手番: 2/2チーム（3ビンゴで終了）」であること
+    expect(turnCard.find('.summary-value').text()).toBe('2 ターン目')
+    expect(turnCard.find('.summary-subtext').text()).toBe('手番: 2/2チーム（3ビンゴで終了）')
+  })
+
+  it('現在の開始文字カードで同一濁点グループの文字がすべて表示される', async () => {
+    const store = useGameStore()
+    store.roomId = 'room-1'
+    store.myPlayerId = 'p1'
+
+    const createTestState = (startChar: string | null) => ({
+      phase: 'playing' as const,
+      settings: createDefaultSettings(),
+      hostPlayerId: 'p1',
+      hasPassword: false,
+      freeChar: 'あ',
+      players: [
+        { id: 'p1', name: 'プレイヤー1', teamId: null, isCpu: false, connectionStatus: 'connected' as const, disconnectedAt: null, card: { size: 3, cells: [], freeChar: 'あ' }, bingoLineIds: [], openedCellCount: 0, status: 'active' as const },
+      ],
+      teams: [],
+      playOrder: ['p1'],
+      round: 1,
+      roundRoster: ['p1'],
+      orderIndex: 0,
+      currentPlayerId: 'p1',
+      currentTeamId: null,
+      requiredStartChar: startChar,
+      usedWords: [],
+      wordHistory: [],
+      remainingTimeMs: 30000,
+      currentTurnTimeLimitMs: 30000,
+      currentTurnInputPlayerId: null,
+      turnStartedAt: Date.now(),
+      result: null,
+      undoHistory: [],
+    })
+
+    // 1. 「ば」の場合: 「は」「ば」「ぱ」の3文字が表示される
+    store.applyGameState(createTestState('ば'))
+    const wrapper1 = mount(PlayingView)
+    const startLetterCard1 = wrapper1.findAll('.summary-card')[1]
+    const letters1 = startLetterCard1.findAll('.start-letter').map(el => el.text())
+    expect(letters1).toEqual(['は', 'ば', 'ぱ'])
+
+    // 2. 「か」の場合: 「か」「が」の2文字が表示される
+    store.applyGameState(createTestState('か'))
+    const wrapper2 = mount(PlayingView)
+    const startLetterCard2 = wrapper2.findAll('.summary-card')[1]
+    const letters2 = startLetterCard2.findAll('.start-letter').map(el => el.text())
+    expect(letters2).toEqual(['か', 'が'])
+
+    // 3. 「あ」の場合: 「あ」の1文字が表示される
+    store.applyGameState(createTestState('あ'))
+    const wrapper3 = mount(PlayingView)
+    const startLetterCard3 = wrapper3.findAll('.summary-card')[1]
+    const letters3 = startLetterCard3.findAll('.start-letter').map(el => el.text())
+    expect(letters3).toEqual(['あ'])
+
+    // 4. null / 空文字の場合: 「—」が表示される
+    store.applyGameState(createTestState(null))
+    const wrapper4 = mount(PlayingView)
+    const startLetterCard4 = wrapper4.findAll('.summary-card')[1]
+    const letters4 = startLetterCard4.findAll('.start-letter').map(el => el.text())
+    expect(letters4).toEqual(['—'])
   })
 })
