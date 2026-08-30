@@ -131,3 +131,38 @@ def test_elect_host_never_picks_cpu():
     # 人間が0人の場合はNone
     assert cleanup.elect_host([cpu1, cpu2]) is None
 
+
+@pytest.mark.anyio
+async def test_touch_session_extends_active_lifetime():
+    """touch_session により last_seen_at が更新され、クリーンアップで失効されないことの検証。"""
+    settings = Settings(cardSize=3)
+    await dao.create_room("room_touched", None, settings)
+    state = await dao.load_room_state("room_touched")
+    assert state is not None
+    host = Player(id="host_1", name="HostPlayer", connectionStatus="connected", sortOrder=1)
+    state.players.append(host)
+    state.hostPlayerId = host.id
+    await dao.save_room_state("room_touched", state)
+
+    await dao.create_session("session_host", "room_touched", host.id, "token-host")
+    await dao.update_session_connections("session_host", 1)
+
+    # 40秒前の古いセッションをシミュレート
+    now = dao.now_ms()
+    from app.orm_models import PlayerSession
+    await PlayerSession.filter(id="session_host").update(last_seen_at=now - 40 * 1000)
+
+    # touch_session を呼び出す（最新時刻に更新）
+    await dao.touch_session("session_host")
+
+    # クリーンアップ実行
+    await cleanup._cleanup_once()
+
+    # 失効されずに connected のままであること
+    refreshed_state = await dao.load_room_state("room_touched")
+    assert refreshed_state is not None
+    assert len(refreshed_state.players) == 1
+    assert refreshed_state.players[0].connectionStatus == "connected"
+    assert refreshed_state.hostPlayerId == host.id
+
+

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import secrets
 
 from fastapi import APIRouter, HTTPException, Request
@@ -8,6 +9,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from app import broadcast, cleanup, cpu, dao, db, engine, security
 from app.limiter import limiter
+
+logger = logging.getLogger(__name__)
 from app.models import (
     ActionRequest,
     ChangeHostRequest,
@@ -272,6 +275,10 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
             host_changed = True
         is_host = state.hostPlayerId == player_id
         await dao.save_room_state(room_id, state)
+        logger.info(
+            f"Player reconnected via join API: room={room_id}, player={player_id}, "
+            f"is_host={is_host}, host_changed={host_changed}"
+        )
         await broadcast.broadcast(
             room_id,
             state,
@@ -328,6 +335,10 @@ async def join_room(room_id: str, request: Request, body: JoinRoomRequest):
     new_token = security.generate_session_token()
     await dao.create_session(
         session_id, room_id, player_id, security.hash_token(new_token)
+    )
+    logger.info(
+        f"New player joined: room={room_id}, player={player_id}, name={body.name}, "
+        f"is_host={is_host}, host_changed={host_changed}"
     )
     await broadcast.broadcast(
         room_id,
@@ -497,6 +508,10 @@ async def leave_room(room_id: str, request: Request):
             raise HTTPException(status_code=403, detail="参加者が見つかりません")
 
         host_changed = await cleanup_remove_player(room_id, state, player_id)
+        logger.info(
+            f"Player left room via leave API: room={room_id}, player={player_id}, "
+            f"host_changed={host_changed}"
+        )
         response = JSONResponse(status_code=200, content={"gameState": _public_state(state)})
         security.clear_session_cookie(response)
         await broadcast.broadcast(
@@ -552,6 +567,10 @@ async def disconnect_room(room_id: str, request: Request):
                 host_changed = True
 
         await dao.save_room_state(room_id, state)
+        logger.info(
+            f"Player disconnected via API: room={room_id}, player={player_id}, "
+            f"phase={state.phase}, host_changed={host_changed}, new_host={state.hostPlayerId}"
+        )
         await broadcast.broadcast(
             room_id,
             state,
@@ -803,6 +822,9 @@ async def change_host(room_id: str, request: Request, body: ChangeHostRequest):
             raise HTTPException(status_code=400, detail="切断中の参加者を親に指定することはできません")
         state.hostPlayerId = body.playerId
         await dao.save_room_state(room_id, state)
+        logger.info(
+            f"Host changed manually: room={room_id}, old_host={player_id}, new_host={body.playerId}"
+        )
         await broadcast.broadcast(
             room_id, state, notice="親が変更されました。"
         )
@@ -833,6 +855,10 @@ async def kick_player(room_id: str, request: Request, body: KickPlayerRequest):
         target_name = target_player.name if target_player else "参加者"
 
         await cleanup_remove_player(room_id, state, body.playerId)
+        logger.info(
+            f"Player kicked: room={room_id}, operator={operator_player_id}, "
+            f"target={body.playerId} ({target_name})"
+        )
         await broadcast.broadcast(
             room_id,
             state,
@@ -985,17 +1011,6 @@ async def action(room_id: str, request: Request, body: ActionRequest):
     )
 
 
-async def _wait_for_disconnect(request: Request) -> None:
-    """クライアントの切断（http.disconnect）を待機する。"""
-    while True:
-        try:
-            message = await request._receive()
-            if message.get("type") == "http.disconnect":
-                return
-        except Exception:  # noqa: BLE001
-            return
-
-
 @router.get("/api/rooms/{room_id}/events")
 async def events(room_id: str, request: Request):
     token = request.cookies.get(security.SESSION_COOKIE_NAME)
@@ -1009,7 +1024,6 @@ async def events(room_id: str, request: Request):
 
     async def event_generator():
         queue = broadcast.subscribe(room_id)
-        disconnect_task = asyncio.create_task(_wait_for_disconnect(request))
         try:
             async with db._write_lock:
                 state = await dao.load_room_state(room_id)
@@ -1059,32 +1073,44 @@ async def events(room_id: str, request: Request):
                 await dao.save_room_state(room_id, state)
                 host_changed = await _elect_new_host_if_needed(state)
                 await dao.save_room_state(room_id, state)
+                logger.info(
+                    f"SSE connected: room={room_id}, player={player_id}, "
+                    f"phase={state.phase}, host_changed={host_changed}"
+                )
+
+                # 接続者自身にのみ initial イベントを送信
+                initial_payload = {
+                    "event": "initial",
+                    "timestamp": dao.now_ms(),
+                    "gameState": _public_state(state),
+                }
+                if host_changed:
+                    initial_payload["notice"] = "親が変更されました。"
+                yield broadcast.format_sse(initial_payload)
+
+                # 他のプレイヤーには update イベントを配信
                 await broadcast.broadcast(
                     room_id,
                     state,
-                    event="initial",
+                    event="update",
                     notice="親が変更されました。" if host_changed else None,
                 )
 
-            while not disconnect_task.done():
-                get_task = asyncio.create_task(queue.get())
-                done, _pending = await asyncio.wait(
-                    [get_task, disconnect_task],
-                    timeout=3.0,
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                if disconnect_task in done:
-                    get_task.cancel()
+            last_touch_ms = dao.now_ms()
+            while True:
+                if await request.is_disconnected():
                     break
-
-                now_touch = dao.now_ms()
-                await dao.touch_session(session["id"])
-
-                if get_task in done:
-                    payload = get_task.result()
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    now = dao.now_ms()
+                    if now - last_touch_ms >= 5000:
+                        await dao.touch_session(session["id"])
+                        last_touch_ms = now
                     yield broadcast.format_sse(payload)
-                else:
-                    get_task.cancel()
+                except TimeoutError:
+                    now_touch = dao.now_ms()
+                    await dao.touch_session(session["id"])
+                    last_touch_ms = now_touch
                     yield broadcast.format_sse(
                         {
                             "event": "ping",
@@ -1092,50 +1118,36 @@ async def events(room_id: str, request: Request):
                         }
                     )
         finally:
-            disconnect_task.cancel()
             broadcast.unsubscribe(room_id, queue)
             async with db._write_lock:
                 new_count = await dao.update_session_connections(session["id"], -1)
+                host_changed = False
                 if new_count == 0:
                     await dao.set_player_connection_status(player_id, False)
                     state = await dao.load_room_state(room_id)
                     if state is not None:
-                        host_changed = False
-                        if state.phase == "setup":
-                            state.players = [
-                                p for p in state.players if p.id != player_id
-                            ]
-                            for team in state.teams:
-                                team.memberPlayerIds = [
-                                    p.id
-                                    for p in state.players
-                                    if p.teamId == team.id
-                                ]
-                            if state.hostPlayerId == player_id or (
-                                state.hostPlayerId is not None
-                                and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
-                            ):
-                                state.hostPlayerId = cleanup.elect_host(state.players)
-                                host_changed = True
-                        else:
-                            player = next(
-                                (p for p in state.players if p.id == player_id), None
-                            )
-                            if player is not None:
-                                player.connectionStatus = "disconnected"
-                                player.disconnectedAt = dao.now_ms()
-                            if state.hostPlayerId == player_id or (
-                                state.hostPlayerId is not None
-                                and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
-                            ):
-                                state.hostPlayerId = cleanup.elect_host(state.players)
-                                host_changed = True
+                        player = next(
+                            (p for p in state.players if p.id == player_id), None
+                        )
+                        if player is not None:
+                            player.connectionStatus = "disconnected"
+                            player.disconnectedAt = dao.now_ms()
+                        if state.hostPlayerId == player_id or (
+                            state.hostPlayerId is not None
+                            and any(p.id == state.hostPlayerId and p.isCpu for p in state.players)
+                        ):
+                            state.hostPlayerId = cleanup.elect_host(state.players)
+                            host_changed = True
                         await dao.save_room_state(room_id, state)
                         await broadcast.broadcast(
                             room_id,
                             state,
                             notice="親が変更されました。" if host_changed else None,
                         )
+                logger.info(
+                    f"SSE stream closed: room={room_id}, player={player_id}, "
+                    f"remaining_connections={new_count}, host_changed={host_changed}"
+                )
 
     return StreamingResponse(
         event_generator(),

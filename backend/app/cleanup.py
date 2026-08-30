@@ -79,6 +79,10 @@ async def _cleanup_once() -> None:
                     state.hostPlayerId = elect_host(state.players)
                     host_changed = True
             await dao.save_room_state(room_id, state)
+            logger.info(
+                f"Stale session expired: room={room_id}, player={player_id}, "
+                f"phase={state.phase}, host_changed={host_changed}"
+            )
             await broadcast.broadcast(
                 room_id,
                 state,
@@ -91,6 +95,7 @@ async def _cleanup_once() -> None:
     for room_id in old_rooms:
         await dao.delete_room(room_id)
         broadcast._rooms.pop(room_id, None)
+        logger.info(f"Deleted expired room (>24h): room={room_id}")
 
     # setup/result 状態で30分以上切断されているプレイヤーを削除
     cutoff_player = now - 30 * 60 * 1000
@@ -107,6 +112,10 @@ async def _cleanup_once() -> None:
                     continue
                 host_changed = remove_player_from_state(state, player_id)
                 await dao.delete_player(player_id)
+                logger.info(
+                    f"Deleted disconnected player (>30m): room={room_id}, player={player_id}, "
+                    f"phase={phase}, host_changed={host_changed}"
+                )
                 if state.players:
                     await dao.save_room_state(room_id, state)
                     await broadcast.broadcast(
@@ -117,6 +126,7 @@ async def _cleanup_once() -> None:
                 else:
                     await dao.delete_room(room_id)
                     broadcast._rooms.pop(room_id, None)
+                    logger.info(f"Deleted empty room after removing player: room={room_id}")
 
     # 30分以上プレイヤーが0人のルームを削除
     cutoff_empty_room = now - 30 * 60 * 1000
@@ -124,6 +134,7 @@ async def _cleanup_once() -> None:
     for room_id in empty_rooms:
         await dao.delete_room(room_id)
         broadcast._rooms.pop(room_id, None)
+        logger.info(f"Deleted empty room (>30m): room={room_id}")
 
 
 async def run_forced_skip_loop() -> None:
