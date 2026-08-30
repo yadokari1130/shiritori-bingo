@@ -200,6 +200,34 @@ def test_name_and_word_html_sanitization():
         assert "次郎" in updated_name
 
 
+def test_name_bidi_and_control_characters_sanitization():
+    """BiDi制御文字（U+202Eなど）や不可視文字・フォーマット文字が除去されること。"""
+    with TestClient(app) as base:
+        client = _make_clients(base)
+        res = client.post("/api/rooms", json={"settings": Settings().model_dump()})
+        assert res.status_code == 200
+        room_id = res.json()["roomId"]
+
+        # BiDi制御文字 U+202E (RLO) を含むプレイヤー名で参加: "ビン\<0x202e>ゴ<0x202e>"
+        bidi_name = "ビン\\\u202eゴ\u202e"
+        join_res = client.post(f"/api/rooms/{room_id}/join", json={"name": bidi_name})
+        assert join_res.status_code == 200
+
+        # U+202E が除去され "ビン\\ゴ" にサニタイズされていること
+        player_name = join_res.json()["gameState"]["players"][0]["name"]
+        assert "\u202e" not in player_name
+        assert player_name == "ビン\\ゴ"
+
+        # ゼロ幅スペースやその他のフォーマット制御文字を含む名前変更
+        update_res = client.put(
+            f"/api/rooms/{room_id}/name",
+            json={"name": "\u200b花子\u200e\ufeff"},
+        )
+        assert update_res.status_code == 200
+        updated_name = update_res.json()["gameState"]["players"][0]["name"]
+        assert updated_name == "花子"
+
+
 def test_security_headers_present():
     """レスポンスにセキュリティヘッダーが付与されていること。"""
     with TestClient(app) as client:

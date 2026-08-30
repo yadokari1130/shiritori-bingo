@@ -4,20 +4,29 @@ from typing import Annotated, Literal
 import nh3
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+_DISALLOWED_UNICODE_CATEGORIES = {"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"}
+
 
 def sanitize_text(text: str, max_length: int = 50) -> str:
-    """nh3 と unicodedata を使用してプレーンテキストを無害化・正規化する。"""
+    """nh3 と unicodedata を使用してプレーンテキストを無害化・正規化する。
+
+    HTMLタグの除去、NFKC正規化、Unicode制御文字・BiDi制御文字・不可視文字の除去、
+    および前後の空白トリムを行います。
+    """
     if not text:
         return ""
     # 1. HTMLタグ・スクリプトの完全除去
     cleaned = nh3.clean(text, tags=set())
     # 2. Unicode NFKC 正規化
     normalized = unicodedata.normalize("NFKC", cleaned)
-    # 3. 制御文字（ASCII制御文字およびDEL）の除去
-    sanitized = "".join(ch for ch in normalized if ord(ch) >= 32 and ord(ch) != 127)
-    # 4. 前後の空白（全角空白・ゼロ幅スペース含む）をトリム
+    # 3. 制御文字・BiDi制御文字・フォーマット文字・不可視文字の除去
+    sanitized = "".join(
+        ch for ch in normalized if unicodedata.category(ch) not in _DISALLOWED_UNICODE_CATEGORIES
+    )
+    # 4. 前後の空白（全角空白・半角空白）をトリム
     trimmed = sanitized.strip(" \t\n\r\u3000\u200b\u200c\u200d\ufeff")
     return trimmed[:max_length]
+
 
 
 class CardOptions(BaseModel):
