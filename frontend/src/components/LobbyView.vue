@@ -18,19 +18,30 @@ const isUpdating = ref(false)
 const copied = ref(false)
 const showRuleModal = ref(false)
 
+let lastSyncedSettingsJson = ''
 watch(
   () => store.settings,
   (s) => {
-    editSettings.value = { ...s }
+    const sJson = JSON.stringify(s)
+    if (sJson !== lastSyncedSettingsJson) {
+      lastSyncedSettingsJson = sJson
+      editSettings.value = {
+        ...s,
+        cardOptions: { ...s.cardOptions },
+      }
+    }
   },
-  { immediate: true },
+  { immediate: true, deep: true },
 )
 
+let lastSyncedPlayerName = ''
 watch(
-  () => store.myPlayer,
-  (p) => {
-    if (p)
-      editingName.value = p.name
+  () => store.myPlayer?.name,
+  (name) => {
+    if (name && name !== lastSyncedPlayerName) {
+      lastSyncedPlayerName = name
+      editingName.value = name
+    }
   },
   { immediate: true },
 )
