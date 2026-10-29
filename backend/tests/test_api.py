@@ -1,8 +1,8 @@
 from pathlib import Path
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
+from starlette.testclient import httpx
 
 from app import dao, db
 from app.main import app

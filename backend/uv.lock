@@ -1137,7 +1137,7 @@ wheels = [
 
 [[package]]
 name = "pytest"
-version = "8.4.2"
+version = "9.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
@@ -1146,9 +1146,9 @@ dependencies = [
     { name = "pluggy" },
     { name = "pygments" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a3/5c/00a0e072241553e1a7496d638deababa67c5058571567b92a7eaa258397c/pytest-8.4.2.tar.gz", hash = "sha256:86c0d0b93306b961d58d62a4db4879f27fe25513d4b969df351abdddb3c30e01", size = 1519618, upload-time = "2025-09-04T14:34:22.711Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/79/42/bb4641652e58dedeac2ec51abc1f8cae4fee4ec63899a0999016229a0f2a/pytest-9.2.0.tar.gz", hash = "sha256:97c4f3b1f3c7414aa36465e09b8220f1d03627993bd51b1282e193753c80557b", size = 1797555, upload-time = "2026-10-27T21:30:20.728Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/a4/20da314d277121d6534b3a980b29035dcd51e6744bd79075a6ce8fa4eb8d/pytest-8.4.2-py3-none-any.whl", hash = "sha256:872f880de3fc3a5bdc88a11b39c9710c3497a547cfa9320bc3c5e62fbf272e79", size = 365750, upload-time = "2025-09-04T14:34:20.226Z" },
+    { url = "https://files.pythonhosted.org/packages/51/39/1f5d8c8877a0fa327db959c19341d4be61660de1ab6b7391f9eb805bcd67/pytest-9.2.0-py3-none-any.whl", hash = "sha256:07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588", size = 411776, upload-time = "2026-10-27T21:30:19.131Z" },
 ]
 
 [[package]]
@@ -1400,7 +1400,6 @@ dependencies = [
     { name = "pytest-cov" },
     { name = "secure" },
     { name = "slowapi" },
-    { name = "sse-game-lib" },
     { name = "tortoise-orm" },
 ]
 
@@ -1420,14 +1419,13 @@ requires-dist = [
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "secure", specifier = ">=0.3.0" },
     { name = "slowapi", specifier = ">=0.1.9" },
-    { name = "sse-game-lib", git = "https://github.com/yadokari1130/sse-game-lib" },
     { name = "tortoise-orm", specifier = ">=0.25.1,<1.0.0" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "janome", specifier = ">=0.5.0" },
-    { name = "pytest", specifier = ">=8.4.1,<9.0.0" },
+    { name = "pytest", specifier = ">=9.0.0,<10.0.0" },
     { name = "ruff", specifier = ">=0.12.10,<1.0.0" },
 ]
 
@@ -1441,20 +1439,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b9/52/24527cf25a8b508926aff53350b0136561dfe86c7125f61526653666e1b2/slowapi-0.1.10.tar.gz", hash = "sha256:d320d5bc04d9f171a77fb16700faf3036d85b00f420f22924c8a225f95bd14f9", size = 13841, upload-time = "2026-06-13T11:59:31.571Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c4/8b/1d359f38706b4097d9a943bf8bd22599f537de4cbaff1e622d3e3936e164/slowapi-0.1.10-py3-none-any.whl", hash = "sha256:3acb61561dc9d687e3d3669362ff6a439de9ba44e2fed3a9c165da26b4b83e28", size = 14921, upload-time = "2026-06-13T11:59:30.485Z" },
-]
-
-[[package]]
-name = "sse-game-lib"
-version = "0.1.0"
-source = { git = "https://github.com/yadokari1130/sse-game-lib#4fb65a92c14132bef5bc5c45b724fa55e71af272" }
-dependencies = [
-    { name = "aiosqlite" },
-    { name = "bcrypt" },
-    { name = "fastapi", extra = ["standard"] },
-    { name = "nh3" },
-    { name = "pydantic" },
-    { name = "slowapi" },
-    { name = "tortoise-orm" },
 ]
 
 [[package]]

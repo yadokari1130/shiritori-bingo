@@ -1,9 +1,9 @@
 from pathlib import Path
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
+from starlette.testclient import httpx
 
 from app import db
 from app.limiter import get_client_ip, limiter
